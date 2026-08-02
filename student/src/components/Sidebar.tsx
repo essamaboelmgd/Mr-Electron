@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { BookOpen, ClipboardList, LayoutDashboard, LogOut, Menu, Settings, Target, UserRound, X } from 'lucide-react';
 import { NavLink, useNavigate } from '@/lib/router';
 import { cn } from '@/lib/utils';
@@ -14,25 +14,29 @@ export const Sidebar = () => {
   const navigate = useNavigate();
   const { user, logout } = useAuth();
   const [open, setOpen] = useState(false);
+  const menuRef = useRef<HTMLDivElement>(null);
+  const toggleRef = useRef<HTMLButtonElement>(null);
   useEffect(() => {
     if (!open) return undefined;
-    const previous = document.body.style.overflow;
-    const previousFocus = document.activeElement as HTMLElement | null;
     const isMobile = window.matchMedia('(max-width: 820px)').matches;
+    const toggleButton = toggleRef.current;
+    const onPointerDown = (event: PointerEvent) => {
+      if (!menuRef.current?.contains(event.target as Node)) setOpen(false);
+    };
     const onKeyDown = (event: KeyboardEvent) => {
       if (event.key === 'Escape') setOpen(false);
     };
     if (isMobile) {
-      document.body.style.overflow = 'hidden';
       window.requestAnimationFrame(() => {
-        document.querySelector<HTMLElement>('#student-sidebar a, #student-sidebar button')?.focus();
+        document.querySelector<HTMLElement>('#student-mobile-actions a, #student-mobile-actions button')?.focus();
       });
     }
+    document.addEventListener('pointerdown', onPointerDown);
     document.addEventListener('keydown', onKeyDown);
     return () => {
-      document.body.style.overflow = previous;
+      document.removeEventListener('pointerdown', onPointerDown);
       document.removeEventListener('keydown', onKeyDown);
-      if (isMobile && previousFocus?.isConnected) previousFocus.focus();
+      if (isMobile) toggleButton?.focus();
     };
   }, [open]);
   const handleLogout = () => {
@@ -69,11 +73,13 @@ export const Sidebar = () => {
   );
 
   return (
-    <div className="sidebar-slot">
-      <button id="student-sidebar-toggle" className="mobile-menu-button" type="button" onClick={() => setOpen((value) => !value)} aria-controls="student-sidebar" aria-expanded={open} aria-label={open ? 'إغلاق القائمة' : 'فتح القائمة'}>
+    <div ref={menuRef} className="sidebar-slot">
+      <button ref={toggleRef} id="student-sidebar-toggle" className="mobile-menu-button" type="button" onClick={() => setOpen((value) => !value)} aria-controls="student-mobile-actions" aria-expanded={open} aria-label={open ? 'إغلاق الاختصارات' : 'فتح الاختصارات'}>
         {open ? <X size={21} /> : <Menu size={21} />}
       </button>
-      {open && <button className="mobile-overlay" type="button" aria-label="إغلاق القائمة" onClick={() => setOpen(false)} />}
+      <nav id="student-mobile-actions" className={cn('mobile-action-menu', open && 'is-open')} aria-label="اختصارات الطالب" aria-hidden={!open}>
+        {groups.flatMap(({ links }) => links).map(({ label, path, icon: Icon }) => <NavLink key={path} to={path} end={path === '/dashboard'} onClick={() => setOpen(false)} className={({ isActive }) => cn('mobile-action-item', isActive && 'is-active')}><Icon size={20} strokeWidth={1.9} aria-hidden="true" /><span className="mobile-action-label">{label}</span></NavLink>)}
+      </nav>
       <aside id="student-sidebar" className={cn('sidebar', open && 'is-open')} aria-label="القائمة الرئيسية">{content}</aside>
     </div>
   );
