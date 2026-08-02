@@ -127,5 +127,57 @@ export default function ExamPlayerPage() {
   if (existingResult && !attempt) return <AppShell><div className="result-locked"><span className="result-seal"><CheckCircle2 size={32} /></span><span className="eyebrow">لا توجد محاولة جديدة</span><h1>وصلت للحد المسموح من المحاولات</h1><p>آخر نتيجة لك {Math.round(existingResult.percentage)}٪. يمكنك العودة للنتيجة أو مراجعة الإجابات إذا فتحها المدرس.</p><div className="result-actions"><button type="button" className="primary-button" onClick={() => navigate(`/exams/${id}/result?attemptId=${existingResult.submission._id}`)}>عرض النتيجة</button><button type="button" className="quiet-button" onClick={() => navigate('/exams')}>العودة</button></div></div></AppShell>;
   if (!currentQuestion || !attempt) return <AppShell><div className="empty-state"><FileText size={26} /><h2>الامتحان لم يجهز بأسئلة بعد</h2><p>سيظهر هنا فور إضافة أسئلة من المدرس.</p><button type="button" className="outline-button" onClick={() => navigate('/exams')}>العودة</button></div></AppShell>;
 
-  return <AppShell><div className="exam-player page-stack"><button className="back-link" type="button" onClick={() => navigate('/exams')}><ArrowRight size={17} /> الخروج للامتحانات</button><section className="exam-player-head"><div><span className="eyebrow">{exam.type === 'general' ? 'امتحان عام' : 'امتحان باب'}</span><h1>{exam.title}</h1><p>المحاولة {attempt.attemptNumber} · السؤال {current + 1} من {questions.length}</p></div>{exam.timeLimitMin > 0 && <div className={`timer-chip ${timeLeft < 120 ? 'is-warning' : ''}`}><Clock3 size={17} /> {formattedTime}</div>}</section><div className="exam-progress"><span style={{ transform: `scaleX(${(current + 1) / questions.length})` }} /></div><section className="question-card"><div className="question-number">سؤال {String(current + 1).padStart(2, '0')}</div><h2>{currentQuestion.content}</h2><div className="answer-options">{currentQuestion.options.map((option) => <label className={`answer-option ${answers[currentQuestion._id] === option.id ? 'is-selected' : ''}`} key={option.id}><input type="radio" name={currentQuestion._id} value={option.id} checked={answers[currentQuestion._id] === option.id} onChange={() => setAnswers((value) => ({ ...value, [currentQuestion._id]: option.id }))} /><span className="fake-radio" /><span>{option.text}</span></label>)}</div></section>{error && <div className="form-error" role="alert">{error}</div>}<div className="exam-navigation"><button className="quiet-button" type="button" onClick={() => setCurrent((value) => Math.max(0, value - 1))} disabled={current === 0}><ChevronRight size={17} /> السابق</button><span>{answerCount} / {questions.length} تمت الإجابة</span>{isLast ? <button className="primary-button" type="button" onClick={() => void submit()} disabled={submitting}>{submitting ? <span className="spinner spinner-light" /> : <Send size={16} />} {submitting ? 'جارٍ التصحيح...' : 'تسليم الامتحان'}</button> : <button className="primary-button" type="button" onClick={() => setCurrent((value) => Math.min(questions.length - 1, value + 1))}>التالي <ChevronLeft size={17} /></button>}</div>{policy?.maxAttempts && policy.maxAttempts > 1 && <p className="exam-policy-note">متاح لك حتى {policy.maxAttempts} محاولات لهذا الامتحان.</p>}</div></AppShell>;
+  return (
+    <AppShell>
+      <div className="exam-player page-stack">
+        <div className="exam-topline">
+          <button className="back-link" type="button" onClick={() => navigate('/exams')}><ArrowRight size={17} /> الخروج للامتحانات</button>
+          <span className="exam-mode-label"><FileText size={14} /> {exam.type === 'general' ? 'امتحان عام' : 'امتحان باب'}</span>
+        </div>
+
+        <section className="exam-player-head">
+          <div className="exam-title-block">
+            <span className="eyebrow">أنت في وضع التركيز</span>
+            <h1>{exam.title}</h1>
+            <p>المحاولة {attempt.attemptNumber} · السؤال {current + 1} من {questions.length}</p>
+          </div>
+          <div className="exam-status-cluster">
+            {exam.timeLimitMin > 0 && <div className={`timer-chip ${timeLeft < 120 ? 'is-warning' : ''}`}><Clock3 size={17} /><span><small>الوقت المتبقي</small><strong>{formattedTime}</strong></span></div>}
+            <div className="exam-progress-stat"><span>الإجابات</span><strong>{answerCount}<small>/{questions.length}</small></strong></div>
+          </div>
+        </section>
+
+        <section className="exam-progress-panel" aria-label="تقدم الامتحان">
+          <div className="exam-progress-label"><span>تقدمك في الامتحان</span><strong>{Math.round(((current + 1) / questions.length) * 100)}٪</strong></div>
+          <div className="exam-progress"><span style={{ transform: `scaleX(${(current + 1) / questions.length})` }} /></div>
+        </section>
+
+        <section className="question-card">
+          <div className="question-card-head">
+            <div className="question-number"><span>سؤال</span><strong>{String(current + 1).padStart(2, '0')}</strong></div>
+            <span className="question-marks">{currentQuestion.marks || 1} {currentQuestion.marks === 1 ? 'درجة' : 'درجات'}</span>
+          </div>
+          <div className="question-card-body">
+            <h2>{currentQuestion.content}</h2>
+            <div className="answer-options" role="radiogroup" aria-label="اختيارات السؤال">
+              {currentQuestion.options.map((option) => <label className={`answer-option ${answers[currentQuestion._id] === option.id ? 'is-selected' : ''}`} key={option.id}>
+                <input type="radio" name={currentQuestion._id} value={option.id} checked={answers[currentQuestion._id] === option.id} onChange={() => setAnswers((value) => ({ ...value, [currentQuestion._id]: option.id }))} />
+                <span className="answer-option-key">{option.id.toUpperCase()}</span>
+                <span>{option.text}</span>
+              </label>)}
+            </div>
+          </div>
+        </section>
+
+        {error && <div className="form-error" role="alert">{error}</div>}
+
+        <div className="exam-navigation">
+          <button className="quiet-button" type="button" onClick={() => setCurrent((value) => Math.max(0, value - 1))} disabled={current === 0}><ChevronRight size={17} /> السابق</button>
+          <div className="exam-nav-center"><strong>السؤال {current + 1} من {questions.length}</strong><span>{answerCount} تمت الإجابة</span></div>
+          {isLast ? <button className="primary-button" type="button" onClick={() => void submit()} disabled={submitting}>{submitting ? <span className="spinner spinner-light" /> : <Send size={16} />} {submitting ? 'جارٍ التصحيح...' : 'تسليم الامتحان'}</button> : <button className="primary-button" type="button" onClick={() => setCurrent((value) => Math.min(questions.length - 1, value + 1))}>التالي <ChevronLeft size={17} /></button>}
+        </div>
+        {policy?.maxAttempts && policy.maxAttempts > 1 && <p className="exam-policy-note">متاح لك حتى {policy.maxAttempts} محاولات لهذا الامتحان.</p>}
+      </div>
+    </AppShell>
+  );
 }

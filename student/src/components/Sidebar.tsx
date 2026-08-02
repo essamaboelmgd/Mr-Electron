@@ -13,10 +13,17 @@ const links = [
 export const Sidebar = () => {
   const [open, setOpen] = useState(false);
   useEffect(() => {
-    if (!open || window.innerWidth > 820) return undefined;
+    if (!open) return undefined;
     const previous = document.body.style.overflow;
-    document.body.style.overflow = 'hidden';
-    return () => { document.body.style.overflow = previous; };
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') setOpen(false);
+    };
+    if (window.innerWidth <= 820) document.body.style.overflow = 'hidden';
+    document.addEventListener('keydown', onKeyDown);
+    return () => {
+      document.body.style.overflow = previous;
+      document.removeEventListener('keydown', onKeyDown);
+    };
   }, [open]);
   const content = (
     <div className="sidebar-content">
@@ -47,11 +54,11 @@ export const Sidebar = () => {
 
   return (
     <>
-      <button className="mobile-menu-button" type="button" onClick={() => setOpen((value) => !value)} aria-label={open ? 'إغلاق القائمة' : 'فتح القائمة'}>
+      <button id="student-sidebar-toggle" className="mobile-menu-button" type="button" onClick={() => setOpen((value) => !value)} aria-controls="student-sidebar" aria-expanded={open} aria-label={open ? 'إغلاق القائمة' : 'فتح القائمة'}>
         {open ? <X size={21} /> : <Menu size={21} />}
       </button>
       {open && <button className="mobile-overlay" type="button" aria-label="إغلاق القائمة" onClick={() => setOpen(false)} />}
-      <aside className={cn('sidebar', open && 'is-open')}>{content}</aside>
+      <aside id="student-sidebar" className={cn('sidebar', open && 'is-open')} aria-label="القائمة الرئيسية">{content}</aside>
     </>
   );
 };
