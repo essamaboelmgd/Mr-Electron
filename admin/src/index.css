@@ -123,7 +123,7 @@
 }
 
 /* Authoritative admin shell layout: the sidebar is a measured grid column, not a floating sibling. */
-:root { --admin-header-height: 74px; --admin-sidebar-width: 320px; --admin-z-header: 30; --admin-z-overlay: 55; --admin-z-drawer: 60; --admin-z-floating: 70; }
+:root { --admin-header-height: 74px; --admin-sidebar-width: 264px; --admin-z-header: 30; --admin-z-overlay: 55; --admin-z-drawer: 60; --admin-z-floating: 70; }
 html, body { width: 100%; overflow-x: hidden; }
 .admin-topbar { z-index: var(--admin-z-header); }
 .admin-topbar-inner { width: 100%; max-width: none; }
@@ -287,20 +287,10 @@ body { overflow-x: hidden; }
 /* The rail owns the viewport on desktop; the grid column only reserves its width. */
 @media (min-width: 761px) {
   .admin-sidebar-slot { width: var(--admin-sidebar-width); min-height: calc(100dvh - var(--admin-header-height)); }
-  .admin-sidebar { position: fixed; inset-block-start: var(--admin-header-height); inset-block-end: 0; inset-inline-start: 0; inset-inline-end: auto; right: 0; left: auto; z-index: var(--admin-z-drawer); width: var(--admin-sidebar-width); height: auto; max-height: none; }
+  .admin-sidebar { position: fixed; inset-block-start: var(--admin-header-height); inset-block-end: auto; inset-inline-start: 0; inset-inline-end: auto; right: 0; left: auto; z-index: var(--admin-z-drawer); width: var(--admin-sidebar-width); height: calc(100dvh - var(--admin-header-height)); max-height: none; box-sizing: border-box; }
   .admin-sidebar-inner { height: 100%; max-height: none; overflow-y: auto; }
-  .admin-sidebar-inner { padding-inline: 24px; }
-  .admin-sidebar-kicker { padding-inline: 14px; font-size: 12px; }
-  .admin-nav-item { gap: 13px; padding: 13px 14px; font-size: 13px; }
-  .admin-nav-group-label { padding-inline: 14px; font-size: 10px; }
-  .admin-sidebar-profile { gap: 12px; padding: 15px; }
-  .admin-sidebar-profile strong { font-size: 13px; }
-  .admin-sidebar-profile small { font-size: 10px; }
-  .admin-sidebar-summary > div { padding: 12px; }
-  .admin-sidebar-note { padding: 16px 14px; }
 }
 
-@media (min-width: 761px) and (max-width: 1100px) {
-  :root { --admin-sidebar-width: 280px; }
+@media (min-width: 761px) and (max-width: 900px) {
   .admin-body { grid-template-columns: minmax(0, 1fr) var(--admin-sidebar-width); }
 }
