@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { BookOpen, ClipboardList, LayoutDashboard, Menu, Settings, X } from 'lucide-react';
 import { NavLink } from 'react-router-dom';
 import { cn } from '@/lib/utils';
@@ -12,6 +12,12 @@ const links = [
 
 export const Sidebar = () => {
   const [open, setOpen] = useState(false);
+  useEffect(() => {
+    if (!open || window.innerWidth > 820) return undefined;
+    const previous = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    return () => { document.body.style.overflow = previous; };
+  }, [open]);
   const content = (
     <div className="sidebar-content">
       <div className="sidebar-kicker">مساحة الطالب</div>

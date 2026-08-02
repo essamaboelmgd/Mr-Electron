@@ -32,9 +32,10 @@ export interface Lesson {
   duration: number;
   access: 'active' | 'locked';
   isLocked: boolean;
-  videoProvider?: 'youtube' | 'vimeo' | null;
+  videoProvider?: 'youtube' | 'vimeo' | 'bunny' | null;
   videoId?: string | null;
   videoUrl?: string | null;
+  videoStatus?: 'ready' | 'processing' | 'failed';
   description?: string;
   order: number;
 }
@@ -54,10 +55,18 @@ export const getCourseLessons = async (courseId: string): Promise<Lesson[]> => {
   return response.data.data;
 };
 
-export const getLessonVideoUrl = async (lessonId: string): Promise<{ videoUrl: string; provider: string }> => {
-  const response = await api.get<{ data: { videoUrl: string; provider: string } }>(`/courses/${lessonId}/video-url`);
+export const getLessonVideoUrl = async (lessonId: string): Promise<{ videoUrl: string; provider: 'youtube' | 'vimeo' | 'bunny'; videoId: string; videoStatus?: string }> => {
+  const response = await api.get<{ data: { videoUrl: string; provider: 'youtube' | 'vimeo' | 'bunny'; videoId: string; videoStatus?: string } }>(`/courses/${lessonId}/video-url`);
   return response.data.data;
 };
+
+export const recordVideoEvent = async (lessonId: string, data: {
+  sessionId: string;
+  event: 'play' | 'pause' | 'timeupdate' | 'ended' | 'seeked';
+  positionSeconds: number;
+  durationSeconds: number;
+  watchedDeltaSeconds: number;
+}) => api.post(`/courses/${lessonId}/video-events`, data);
 
 export const getCourseExams = async (courseId: string): Promise<Exam[]> => {
   const response = await api.get<{ data: Exam[] }>('/exams/user?type=course');

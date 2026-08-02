@@ -3,6 +3,9 @@ import { AppError } from '../middleware/errorHandler';
 import Course from '../models/Course';
 import Lesson from '../models/Lesson';
 import Exam from '../models/Exam';
+import VideoProgress from '../models/VideoProgress';
+import VideoWatchSession from '../models/VideoWatchSession';
+import { createBunnyEmbedUrl } from '../services/bunnyService';
 import { paginate, PaginationResult } from '../utils/pagination';
 import {
   buildLessonAccessMap,
@@ -13,7 +16,7 @@ import {
   studentMatchesCourse
 } from '../services/accessService';
 
-export type VideoProvider = 'youtube' | 'vimeo';
+export type VideoProvider = 'youtube' | 'vimeo' | 'bunny';
 
 export interface NormalizedVideo {
   provider: VideoProvider;
@@ -41,6 +44,16 @@ const errorResponse = (res: Response, error: any, fallback = 'حدث خطأ أث
 
 const youtubeEmbed = (videoId: string) => `https://www.youtube.com/embed/${videoId}`;
 const vimeoEmbed = (videoId: string) => `https://player.vimeo.com/video/${videoId}`;
+const bunnyEmbed = (videoId: string) => {
+  const libraryId = process.env.BUNNY_STREAM_LIBRARY_ID || 'library';
+  return `https://iframe.mediadelivery.net/embed/${libraryId}/${videoId}`;
+};
+
+const embedForProvider = (provider: VideoProvider, videoId: string) => {
+  if (provider === 'youtube') return youtubeEmbed(videoId);
+  if (provider === 'vimeo') return vimeoEmbed(videoId);
+  return bunnyEmbed(videoId);
+};
 
 export const normalizeVideoSource = (source: string, provider?: VideoProvider, videoId?: string): NormalizedVideo => {
   const cleanId = videoId?.trim();
@@ -48,7 +61,7 @@ export const normalizeVideoSource = (source: string, provider?: VideoProvider, v
     return {
       provider,
       videoId: cleanId,
-      embedUrl: provider === 'youtube' ? youtubeEmbed(cleanId) : vimeoEmbed(cleanId)
+      embedUrl: embedForProvider(provider, cleanId)
     };
   }
 
@@ -56,7 +69,7 @@ export const normalizeVideoSource = (source: string, provider?: VideoProvider, v
   try {
     parsed = new URL(source.trim());
   } catch {
-    throw new AppError('أدخل رابط فيديو صحيح من YouTube أو Vimeo', 400);
+    throw new AppError('أدخل رابط فيديو صحيح من Bunny أو YouTube أو Vimeo', 400);
   }
 
   const host = parsed.hostname.replace(/^www\./, '').toLowerCase();
@@ -72,17 +85,21 @@ export const normalizeVideoSource = (source: string, provider?: VideoProvider, v
   } else if (host === 'vimeo.com' || host === 'player.vimeo.com') {
     detectedProvider = 'vimeo';
     detectedId = parsed.pathname.match(/(?:video\/)?(\d+)/)?.[1] || '';
+  } else if (host === 'iframe.mediadelivery.net' || host === 'player.mediadelivery.net') {
+    detectedProvider = 'bunny';
+    const pathParts = parsed.pathname.split('/').filter(Boolean);
+    detectedId = pathParts[pathParts.length - 1] || '';
   }
 
   if (!detectedProvider || !detectedId) {
-    throw new AppError('الرابط يجب أن يكون من YouTube أو Vimeo', 400);
+    throw new AppError('الرابط يجب أن يكون من Bunny أو YouTube أو Vimeo', 400);
   }
 
   detectedId = detectedId.split(/[?#&]/)[0];
   return {
     provider: detectedProvider,
     videoId: detectedId,
-    embedUrl: detectedProvider === 'youtube' ? youtubeEmbed(detectedId) : vimeoEmbed(detectedId)
+    embedUrl: embedForProvider(detectedProvider, detectedId)
   };
 };
 
@@ -109,6 +126,8 @@ const serializeLesson = (lesson: any, accessEnabled: boolean, revealVideo: boole
     isLocked: !accessEnabled,
     videoProvider: video?.provider || lesson.videoProvider || null,
     videoId: video?.videoId || lesson.videoId || null,
+    bunnyVideoId: lesson.bunnyVideoId || null,
+    videoStatus: lesson.videoStatus || 'ready',
     videoUrl: revealVideo && accessEnabled ? video?.embedUrl || null : null
   };
 };
@@ -255,15 +274,111 @@ export const getLessonVideoUrl = async (req: Request, res: Response): Promise<vo
     }
 
     const video = normalizeVideoSource(lesson.videoUrl || '', lesson.videoProvider, lesson.videoId);
+    const videoUrl = video.provider === 'bunny'
+      ? createBunnyEmbedUrl(video.videoId, Number(process.env.BUNNY_PLAYBACK_EXPIRY_SECONDS || 900))
+      : video.embedUrl;
     res.status(200).json({
       status: 'success',
       data: {
-        videoUrl: video.embedUrl,
+        videoUrl,
         provider: video.provider,
-        videoId: video.videoId
+        videoId: video.videoId,
+        videoStatus: lesson.videoStatus || 'ready'
       }
     });
   } catch (error: any) {
     errorResponse(res, error, 'تعذر فتح الفيديو');
+  }
+};
+
+export const recordVideoEvent = async (req: Request, res: Response): Promise<void> => {
+  try {
+    if (!req.user) throw new AppError('يجب تسجيل الدخول أولًا', 401);
+    const lesson = await Lesson.findById(req.params.lessonId);
+    if (!lesson) throw new AppError('الدرس غير موجود', 404);
+    const course = await Course.findById(lesson.courseId).select('educationalLevel isActive');
+    if (!course) throw new AppError('الباب غير موجود', 404);
+    assertStudentCourseVisibility(req, course);
+    if (!await getLessonAccess(req.user, lesson)) {
+      throw new AppError('هذا الدرس مقفول حاليًا. اطلب تفعيله من المدرس.', 403);
+    }
+
+    const {
+      sessionId,
+      event = 'timeupdate',
+      positionSeconds = 0,
+      durationSeconds = 0,
+      watchedDeltaSeconds = 0
+    } = req.body || {};
+    if (!sessionId || typeof sessionId !== 'string' || sessionId.length > 120) {
+      throw new AppError('جلسة الفيديو غير صحيحة', 400);
+    }
+
+    const position = Math.max(0, Number(positionSeconds) || 0);
+    const duration = Math.max(0, Number(durationSeconds) || 0);
+    const watchedDelta = Math.min(60, Math.max(0, Number(watchedDeltaSeconds) || 0));
+    const now = new Date();
+    const existingSession = await VideoWatchSession.findOne({
+      userId: req.user._id,
+      lessonId: lesson._id,
+      sessionId
+    });
+    let session = existingSession;
+    let isNewSession = false;
+    if (!session) {
+      try {
+        session = await VideoWatchSession.create({
+          userId: req.user._id,
+          lessonId: lesson._id,
+          sessionId,
+          watchedSeconds: 0,
+          lastPositionSeconds: position,
+          durationSeconds: duration,
+          startedAt: now,
+          lastWatchedAt: now
+        });
+        isNewSession = true;
+      } catch (createError: any) {
+        if (createError?.code !== 11000) throw createError;
+        session = await VideoWatchSession.findOne({ userId: req.user._id, lessonId: lesson._id, sessionId });
+        if (!session) throw createError;
+      }
+    }
+    const nextWatched = Math.min(24 * 60 * 60, session.watchedSeconds + watchedDelta);
+    const completionPercent = duration > 0
+      ? Math.min(100, Math.round((position / duration) * 100))
+      : 0;
+    const completed = event === 'ended' || completionPercent >= 95;
+
+    await VideoWatchSession.findByIdAndUpdate(session._id, {
+      $set: {
+        watchedSeconds: nextWatched,
+        lastPositionSeconds: position,
+        durationSeconds: Math.max(session.durationSeconds || 0, duration),
+        lastWatchedAt: now,
+        ...(completed ? { completedAt: now } : {})
+      }
+    });
+    const progress = await VideoProgress.findOneAndUpdate(
+      { userId: req.user._id, lessonId: lesson._id },
+      {
+        $set: {
+          lastPositionSeconds: position,
+          durationSeconds: Math.max(session.durationSeconds || 0, duration),
+          completionPercent,
+          lastWatchedAt: now,
+          ...(completed ? { completedAt: now } : {})
+        },
+        $inc: {
+          watchedSeconds: watchedDelta,
+          ...(isNewSession ? { sessionCount: 1 } : {})
+        }
+      },
+      { new: true, upsert: true, setDefaultsOnInsert: true }
+    );
+
+    res.status(200).json({ status: 'success', data: { progress } });
+  } catch (error: any) {
+    errorResponse(res, error, 'تعذر حفظ نشاط الفيديو');
   }
 };

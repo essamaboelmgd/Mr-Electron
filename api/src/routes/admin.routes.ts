@@ -20,6 +20,8 @@ import {
   createLesson,
   updateLesson,
   deleteLesson,
+  createBunnyUpload,
+  completeBunnyUpload,
   updateSubscriptionStatus,
   getAllExams,
   getAllAssignments,
@@ -32,6 +34,9 @@ import {
   getAllNoteOrders,
   updateNoteOrderStatus,
   getStudentAccess,
+  getStudentOverview,
+  getStudentExamAttempts,
+  getStudentVideoActivity,
   setStudentCourseAccess,
   setStudentLessonAccess
 } from '../controllers/adminController';
@@ -50,6 +55,8 @@ router.delete('/courses/:id', deleteCourse);
 router.post('/lessons', createLesson);
 router.put('/lessons/:id', updateLesson);
 router.delete('/lessons/:id', deleteLesson);
+router.post('/videos/bunny/upload-session', createBunnyUpload);
+router.post('/lessons/:lessonId/bunny-upload/complete', completeBunnyUpload);
 
 // Exam management
 router.get('/exams', getAllExams);
@@ -82,6 +89,9 @@ router.delete('/questions/:id', deleteQuestion);
 
 // User management
 router.get('/users', getAllUsers);
+router.get('/users/:userId/overview', getStudentOverview);
+router.get('/users/:userId/exam-attempts', getStudentExamAttempts);
+router.get('/users/:userId/video-activity', getStudentVideoActivity);
 router.get('/users/:userId/access', getStudentAccess);
 router.put('/users/:userId/courses/:courseId/access', setStudentCourseAccess);
 router.put('/users/:userId/lessons/:lessonId/access', setStudentLessonAccess);

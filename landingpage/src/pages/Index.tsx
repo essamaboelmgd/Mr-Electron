@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import {
   ArrowLeft,
   Atom,
@@ -50,14 +50,22 @@ const navItems = [
 
 export default function Index() {
   const [menuOpen, setMenuOpen] = useState(false);
+  const [isScrolled, setIsScrolled] = useState(false);
   const [term, setTerm] = useState<'first' | 'second'>('first');
   const selectedTerm = termNotes[term];
 
   const closeMenu = () => setMenuOpen(false);
 
+  useEffect(() => {
+    const updateScrollState = () => setIsScrolled(window.scrollY > 12);
+    updateScrollState();
+    window.addEventListener('scroll', updateScrollState, { passive: true });
+    return () => window.removeEventListener('scroll', updateScrollState);
+  }, []);
+
   return (
     <div className="landing-shell">
-      <header className="landing-header">
+      <header className={`landing-header ${isScrolled ? 'is-scrolled' : ''}`}>
         <a className="landing-brand" href="#home" aria-label="Mr Electron - الصفحة الرئيسية">
           <span className="landing-mark" aria-hidden="true"><i /><i /><i /></span>
           <span><strong>mr electron</strong><small>منصة العلوم</small></span>

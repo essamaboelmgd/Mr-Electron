@@ -6,8 +6,10 @@ export interface ILesson extends Document {
   duration: number; // in minutes
   isLocked?: boolean;
   videoUrl?: string; // Legacy source URL; new records also store normalized provider/id.
-  videoProvider?: 'youtube' | 'vimeo';
+  videoProvider?: 'youtube' | 'vimeo' | 'bunny';
   videoId?: string;
+  bunnyVideoId?: string;
+  videoStatus?: 'ready' | 'processing' | 'failed';
   description?: string;
   order: number;
   createdAt: Date;
@@ -42,12 +44,23 @@ const LessonSchema: Schema = new Schema({
   videoProvider: {
     type: String,
     required: false,
-    enum: ['youtube', 'vimeo']
+    enum: ['youtube', 'vimeo', 'bunny']
   },
   videoId: {
     type: String,
     required: false,
     trim: true
+  },
+  bunnyVideoId: {
+    type: String,
+    required: false,
+    trim: true
+  },
+  videoStatus: {
+    type: String,
+    required: false,
+    enum: ['ready', 'processing', 'failed'],
+    default: 'ready'
   },
   description: {
     type: String,

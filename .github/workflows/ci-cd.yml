@@ -1,0 +1,323 @@
+name: Mr Electron CI/CD
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: mr-electron-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  changes:
+    name: Detect changed apps
+    runs-on: ubuntu-latest
+    outputs:
+      api_build: ${{ steps.detect.outputs.api_build }}
+      api_runtime: ${{ steps.detect.outputs.api_runtime }}
+      api_deps: ${{ steps.detect.outputs.api_deps }}
+      landing: ${{ steps.detect.outputs.landing }}
+      student: ${{ steps.detect.outputs.student }}
+      admin: ${{ steps.detect.outputs.admin }}
+      any: ${{ steps.detect.outputs.any }}
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Calculate affected deployables
+        id: detect
+        shell: bash
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          EVENT_BEFORE: ${{ github.event.before }}
+          CURRENT_SHA: ${{ github.sha }}
+        run: |
+          set -euo pipefail
+
+          if [[ "$EVENT_NAME" == "pull_request" || "$EVENT_NAME" == "workflow_dispatch" ]]; then
+            changed_files="__all__"
+          elif [[ -z "$EVENT_BEFORE" || "$EVENT_BEFORE" =~ ^0+$ ]]; then
+            changed_files="$(git ls-files)"
+          else
+            changed_files="$(git diff --name-only "$EVENT_BEFORE" "$CURRENT_SHA")"
+          fi
+
+          has_path() {
+            [[ "$changed_files" == "__all__" ]] || printf '%s\n' "$changed_files" | grep -Eq "$1"
+          }
+
+          api_build=false
+          api_runtime=false
+          api_deps=false
+          landing=false
+          student=false
+          admin=false
+
+          if has_path '^api/(src/|package(-lock)?\.json$|tsconfig(\..*)?\.json$)'; then
+            api_build=true
+            api_runtime=true
+          fi
+          if has_path '^api/(package(-lock)?\.json)$'; then
+            api_deps=true
+          fi
+          if has_path '^ecosystem\.config\.cjs$'; then
+            api_runtime=true
+          fi
+          if has_path '^landingpage/(src/|public/|package(-lock)?\.json$|index\.html$|vite\.config\..*$|tsconfig(\..*)?\.json$|tailwind\.config\..*$|postcss\.config\..*$)'; then
+            landing=true
+          fi
+          if has_path '^student/(src/|public/|package(-lock)?\.json$|index\.html$|vite\.config\..*$|tsconfig(\..*)?\.json$|tailwind\.config\..*$|postcss\.config\..*$)'; then
+            student=true
+          fi
+          if has_path '^admin/(src/|public/|package(-lock)?\.json$|index\.html$|vite\.config\..*$|tsconfig(\..*)?\.json$|tailwind\.config\..*$|postcss\.config\..*$)'; then
+            admin=true
+          fi
+
+          any=false
+          if [[ "$api_runtime" == true || "$landing" == true || "$student" == true || "$admin" == true ]]; then
+            any=true
+          fi
+
+          {
+            echo "api_build=$api_build"
+            echo "api_runtime=$api_runtime"
+            echo "api_deps=$api_deps"
+            echo "landing=$landing"
+            echo "student=$student"
+            echo "admin=$admin"
+            echo "any=$any"
+          } >> "$GITHUB_OUTPUT"
+
+  build:
+    name: Build changed apps
+    needs: changes
+    if: needs.changes.outputs.any == 'true'
+    runs-on: ubuntu-latest
+    env:
+      CI_EVENT_NAME: ${{ github.event_name }}
+      VITE_API_URL: ${{ vars.VITE_API_URL }}
+      VITE_LANDING_URL: ${{ vars.VITE_LANDING_URL }}
+      VITE_STUDENT_URL: ${{ vars.VITE_STUDENT_URL }}
+      VITE_ADMIN_URL: ${{ vars.VITE_ADMIN_URL }}
+      VITE_LOGIN_URL: ${{ vars.VITE_LOGIN_URL }}
+      VITE_SIGNUP_URL: ${{ vars.VITE_SIGNUP_URL }}
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+          cache-dependency-path: |
+            api/package-lock.json
+            landingpage/package-lock.json
+            student/package-lock.json
+            admin/package-lock.json
+
+      - name: Prepare deployment payloads
+        run: mkdir -p .deploy
+
+      - name: Build API
+        if: needs.changes.outputs.api_build == 'true'
+        run: |
+          set -euo pipefail
+          npm ci --prefix api
+          npm run build --prefix api
+          mkdir -p .deploy/api/dist
+          cp -R api/dist/. .deploy/api/dist/
+          cp api/package.json api/package-lock.json .deploy/api/
+
+      - name: Stage API runtime config
+        if: needs.changes.outputs.api_runtime == 'true'
+        run: |
+          set -euo pipefail
+          mkdir -p .deploy/api
+          cp ecosystem.config.cjs .deploy/api/
+
+      - name: Upload API payload
+        if: needs.changes.outputs.api_runtime == 'true'
+        uses: actions/upload-artifact@v4
+        with:
+          name: api-payload
+          path: .deploy/api
+          if-no-files-found: error
+          retention-days: 3
+
+      - name: Build landing page
+        if: needs.changes.outputs.landing == 'true'
+        run: |
+          set -euo pipefail
+          if [[ "$CI_EVENT_NAME" != "pull_request" ]]; then
+            : "${VITE_STUDENT_URL:?Set the VITE_STUDENT_URL repository variable}"
+            : "${VITE_ADMIN_URL:?Set the VITE_ADMIN_URL repository variable}"
+          fi
+          VITE_STUDENT_URL="${VITE_STUDENT_URL:-http://localhost:5174}"
+          VITE_ADMIN_URL="${VITE_ADMIN_URL:-http://localhost:5175}"
+          VITE_LOGIN_URL="${VITE_LOGIN_URL:-$VITE_STUDENT_URL/login}"
+          VITE_SIGNUP_URL="${VITE_SIGNUP_URL:-$VITE_STUDENT_URL/register}"
+          export VITE_STUDENT_URL VITE_ADMIN_URL VITE_LOGIN_URL VITE_SIGNUP_URL
+          npm ci --prefix landingpage
+          npm run build --prefix landingpage
+          mkdir -p .deploy/landingpage
+          cp -R landingpage/dist .deploy/landingpage/dist
+
+      - name: Upload landing payload
+        if: needs.changes.outputs.landing == 'true'
+        uses: actions/upload-artifact@v4
+        with:
+          name: landingpage-payload
+          path: .deploy/landingpage
+          if-no-files-found: error
+          retention-days: 3
+
+      - name: Build student app
+        if: needs.changes.outputs.student == 'true'
+        run: |
+          set -euo pipefail
+          if [[ "$CI_EVENT_NAME" != "pull_request" ]]; then
+            : "${VITE_API_URL:?Set the VITE_API_URL repository variable}"
+            : "${VITE_LANDING_URL:?Set the VITE_LANDING_URL repository variable}"
+          fi
+          VITE_API_URL="${VITE_API_URL:-http://localhost:3000/api}"
+          VITE_LANDING_URL="${VITE_LANDING_URL:-http://localhost:5173}"
+          export VITE_API_URL VITE_LANDING_URL
+          npm ci --prefix student
+          npm run build --prefix student
+          mkdir -p .deploy/student
+          cp -R student/dist .deploy/student/dist
+
+      - name: Upload student payload
+        if: needs.changes.outputs.student == 'true'
+        uses: actions/upload-artifact@v4
+        with:
+          name: student-payload
+          path: .deploy/student
+          if-no-files-found: error
+          retention-days: 3
+
+      - name: Build admin app
+        if: needs.changes.outputs.admin == 'true'
+        run: |
+          set -euo pipefail
+          if [[ "$CI_EVENT_NAME" != "pull_request" ]]; then
+            : "${VITE_API_URL:?Set the VITE_API_URL repository variable}"
+            : "${VITE_LANDING_URL:?Set the VITE_LANDING_URL repository variable}"
+          fi
+          VITE_API_URL="${VITE_API_URL:-http://localhost:3000/api}"
+          VITE_LANDING_URL="${VITE_LANDING_URL:-http://localhost:5173}"
+          export VITE_API_URL VITE_LANDING_URL
+          npm ci --prefix admin
+          npm run build --prefix admin
+          mkdir -p .deploy/admin
+          cp -R admin/dist .deploy/admin/dist
+
+      - name: Upload admin payload
+        if: needs.changes.outputs.admin == 'true'
+        uses: actions/upload-artifact@v4
+        with:
+          name: admin-payload
+          path: .deploy/admin
+          if-no-files-found: error
+          retention-days: 3
+
+  deploy:
+    name: Deploy changed apps to production
+    needs: [changes, build]
+    if: github.event_name != 'pull_request' && needs.changes.outputs.any == 'true'
+    runs-on: ubuntu-latest
+    env:
+      DEPLOY_HOST: ${{ vars.DEPLOY_HOST }}
+      DEPLOY_PORT: ${{ vars.DEPLOY_PORT }}
+      DEPLOY_USER: ${{ vars.DEPLOY_USER }}
+      DEPLOY_ROOT: ${{ vars.DEPLOY_ROOT }}
+      DEPLOY_SSH_KEY: ${{ secrets.DEPLOY_SSH_KEY }}
+      DEPLOY_KNOWN_HOSTS: ${{ secrets.DEPLOY_KNOWN_HOSTS }}
+      API_HEALTH_URL: ${{ vars.API_HEALTH_URL }}
+      API_RUNTIME_CHANGED: ${{ needs.changes.outputs.api_runtime }}
+      API_DEPS_CHANGED: ${{ needs.changes.outputs.api_deps }}
+      LANDING_CHANGED: ${{ needs.changes.outputs.landing }}
+      STUDENT_CHANGED: ${{ needs.changes.outputs.student }}
+      ADMIN_CHANGED: ${{ needs.changes.outputs.admin }}
+    steps:
+      - name: Download deployment payloads
+        uses: actions/download-artifact@v4
+        with:
+          path: .artifacts
+
+      - name: Configure SSH
+        shell: bash
+        run: |
+          set -euo pipefail
+          : "${DEPLOY_HOST:?Set the DEPLOY_HOST repository variable}"
+          : "${DEPLOY_USER:?Set the DEPLOY_USER repository variable}"
+          : "${DEPLOY_ROOT:?Set the DEPLOY_ROOT repository variable}"
+          : "${DEPLOY_SSH_KEY:?Add DEPLOY_SSH_KEY as a repository secret}"
+          : "${DEPLOY_KNOWN_HOSTS:?Add DEPLOY_KNOWN_HOSTS as a repository secret}"
+          mkdir -p "$HOME/.ssh"
+          chmod 700 "$HOME/.ssh"
+          printf '%s\n' "$DEPLOY_SSH_KEY" > "$HOME/.ssh/id_ed25519"
+          printf '%s\n' "$DEPLOY_KNOWN_HOSTS" > "$HOME/.ssh/known_hosts"
+          chmod 600 "$HOME/.ssh/id_ed25519"
+          chmod 644 "$HOME/.ssh/known_hosts"
+
+      - name: Deploy changed payloads
+        shell: bash
+        run: |
+          set -euo pipefail
+          port="${DEPLOY_PORT:-22}"
+          remote="${DEPLOY_USER}@${DEPLOY_HOST}"
+          export RSYNC_RSH="ssh -p $port"
+          ssh_remote=(ssh -p "$port" "$remote")
+
+          deploy_dist() {
+            local app="$1"
+            local payload=".artifacts/${app}-payload/dist"
+            if [[ -d "$payload" ]]; then
+              "${ssh_remote[@]}" "mkdir -p '$DEPLOY_ROOT/$app/dist'"
+              rsync -az --delete "$payload/" "$remote:$DEPLOY_ROOT/$app/dist/"
+            fi
+          }
+
+          if [[ "$API_RUNTIME_CHANGED" == true ]]; then
+            api_payload=".artifacts/api-payload"
+            "${ssh_remote[@]}" "mkdir -p '$DEPLOY_ROOT/api/dist'"
+
+            if [[ -d "$api_payload/dist" ]]; then
+              rsync -az --delete "$api_payload/dist/" "$remote:$DEPLOY_ROOT/api/dist/"
+              rsync -az "$api_payload/package.json" "$api_payload/package-lock.json" "$remote:$DEPLOY_ROOT/api/"
+            fi
+            if [[ -f "$api_payload/ecosystem.config.cjs" ]]; then
+              rsync -az "$api_payload/ecosystem.config.cjs" "$remote:$DEPLOY_ROOT/"
+            fi
+            if [[ "$API_DEPS_CHANGED" == true ]]; then
+              "${ssh_remote[@]}" "cd '$DEPLOY_ROOT/api' && npm ci --omit=dev"
+            fi
+            "${ssh_remote[@]}" "cd '$DEPLOY_ROOT' && pm2 startOrRestart '$DEPLOY_ROOT/ecosystem.config.cjs' --env production --update-env && pm2 save"
+          fi
+
+          if [[ "$LANDING_CHANGED" == true ]]; then
+            deploy_dist landingpage
+          fi
+          if [[ "$STUDENT_CHANGED" == true ]]; then
+            deploy_dist student
+          fi
+          if [[ "$ADMIN_CHANGED" == true ]]; then
+            deploy_dist admin
+          fi
+
+      - name: Verify API health after API deploy
+        if: needs.changes.outputs.api_runtime == 'true'
+        run: |
+          set -euo pipefail
+          : "${API_HEALTH_URL:?Set the API_HEALTH_URL repository variable}"
+          curl --fail --silent --show-error --retry 10 --retry-delay 3 --retry-connrefused "$API_HEALTH_URL"

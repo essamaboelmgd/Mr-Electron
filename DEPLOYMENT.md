@@ -89,3 +89,45 @@ location / {
 ```
 
 The API should be reverse-proxied to `127.0.0.1:3000`, while MongoDB should not be exposed publicly.
+
+## GitHub Actions CI/CD
+
+The repository includes `.github/workflows/ci-cd.yml`. Pull requests build the affected apps without deploying. A push to `main` detects the changed deployables, builds only those payloads, uploads only those `dist` folders, and restarts PM2 only when the API or its ecosystem config changed. A manual `workflow_dispatch` is treated as a full deployment.
+
+Create these **Repository variables** in GitHub under `Settings → Secrets and variables → Actions → Variables`:
+
+```text
+DEPLOY_HOST=your.server.com
+DEPLOY_PORT=22
+DEPLOY_USER=deploy
+DEPLOY_ROOT=/var/www/mr-electron
+API_HEALTH_URL=https://api.mrelectron.example/api/health
+
+VITE_API_URL=https://api.mrelectron.example/api
+VITE_LANDING_URL=https://mrelectron.example
+VITE_STUDENT_URL=https://student.mrelectron.example
+VITE_ADMIN_URL=https://admin.mrelectron.example
+VITE_LOGIN_URL=https://student.mrelectron.example/login
+VITE_SIGNUP_URL=https://student.mrelectron.example/register
+```
+
+Create these **Repository secrets** in the same Actions page:
+
+```text
+DEPLOY_SSH_KEY       # private ed25519 key for the deploy user
+DEPLOY_KNOWN_HOSTS   # output of: ssh-keyscan -H your.server.com
+```
+
+The server must have Node.js/npm, PM2, rsync, MongoDB, and Nginx installed. Keep the real production secrets in `$DEPLOY_ROOT/api/.env`; the workflow never uploads or replaces that file. The deploy user needs SSH access and write permission to `$DEPLOY_ROOT`, and PM2 must have been initialized once with `pm2 startup` and `pm2 save`.
+
+If Bunny Stream is enabled, add `BUNNY_STREAM_LIBRARY_ID`, `BUNNY_STREAM_API_KEY`, and `BUNNY_STREAM_TOKEN_KEY` to that server-side `.env`. The admin browser receives a short-lived upload session only; Bunny credentials never enter a static frontend build.
+
+Point Nginx at these folders:
+
+```text
+$DEPLOY_ROOT/landingpage/dist
+$DEPLOY_ROOT/student/dist
+$DEPLOY_ROOT/admin/dist
+```
+
+The first push to `main` performs the initial deployment. After that, a student-only change updates only `student/dist`; an API-only change updates `api/dist` and reloads `mr-electron-api`; a docs-only change does nothing.

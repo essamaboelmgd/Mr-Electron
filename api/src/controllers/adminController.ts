@@ -13,10 +13,12 @@ import LessonAccess from '../models/LessonAccess';
 import Note from '../models/Note';
 import NoteOrder from '../models/NoteOrder';
 import Submission from '../models/Submission';
+import VideoProgress from '../models/VideoProgress';
 import { Types } from 'mongoose';
 import { paginate, PaginationResult } from '../utils/pagination';
 import { extractPublicId, deleteImage } from '../services/cloudinaryService';
 import { normalizeVideoSource } from './courseController';
+import { createBunnyUploadSession, isBunnyConfigured } from '../services/bunnyService';
 
 // Admin middleware to check if user is admin
 export const requireAdmin = (req: Request, res: Response, next: any) => {
@@ -154,7 +156,17 @@ export const deleteCourse = async (req: Request, res: Response): Promise<void> =
 // Create an exam
 export const createExam = async (req: Request, res: Response): Promise<void> => {
   try {
-    const { title, type, courseId = null, educationalLevel = null, timeLimitMin = 0, isActive = true } = req.body;
+    const {
+      title,
+      type,
+      courseId = null,
+      educationalLevel = null,
+      timeLimitMin = 0,
+      isActive = true,
+      maxAttempts = 1,
+      reviewMode = 'closed',
+      reviewReleaseAt = null
+    } = req.body;
     if (!['general', 'course'].includes(type)) {
       throw new AppError('نوع الامتحان يجب أن يكون عامًا أو خاصًا بباب', 400);
     }
@@ -164,8 +176,23 @@ export const createExam = async (req: Request, res: Response): Promise<void> => 
     if (type === 'course' && !courseId) {
       throw new AppError('امتحان الباب يحتاج إلى باب', 400);
     }
+    if (!['closed', 'open', 'scheduled'].includes(reviewMode)) {
+      throw new AppError('إعداد مراجعة الإجابات غير صحيح', 400);
+    }
+    if (reviewMode === 'scheduled' && !reviewReleaseAt) {
+      throw new AppError('حدد موعد فتح المراجعة أو اختر فتحًا يدويًا', 400);
+    }
+    if (Number(maxAttempts) < 1) {
+      throw new AppError('عدد المحاولات يجب أن يكون واحدًا على الأقل', 400);
+    }
     const exam = await Exam.create({ title, type, courseId: type === 'course' ? courseId : null,
-      educationalLevel: type === 'general' ? educationalLevel : null, timeLimitMin, isActive });
+      educationalLevel: type === 'general' ? educationalLevel : null,
+      timeLimitMin,
+      isActive,
+      maxAttempts: Math.floor(Number(maxAttempts) || 1),
+      reviewMode,
+      reviewReleaseAt: reviewMode === 'scheduled' ? reviewReleaseAt : null
+    });
     
     res.status(201).json({
       status: 'success',
@@ -192,9 +219,21 @@ export const createExam = async (req: Request, res: Response): Promise<void> => 
 // Update an exam
 export const updateExam = async (req: Request, res: Response): Promise<void> => {
   try {
-    const payload = Object.fromEntries(['title', 'type', 'courseId', 'educationalLevel', 'timeLimitMin', 'isActive']
+    const allowedFields = ['title', 'type', 'courseId', 'educationalLevel', 'timeLimitMin', 'isActive', 'maxAttempts', 'reviewMode', 'reviewReleaseAt'];
+    const payload: any = Object.fromEntries(allowedFields
       .filter((field) => req.body[field] !== undefined)
       .map((field) => [field, req.body[field]]));
+    if (payload.maxAttempts !== undefined && Number(payload.maxAttempts) < 1) {
+      throw new AppError('عدد المحاولات يجب أن يكون واحدًا على الأقل', 400);
+    }
+    if (payload.reviewMode !== undefined && !['closed', 'open', 'scheduled'].includes(payload.reviewMode)) {
+      throw new AppError('إعداد مراجعة الإجابات غير صحيح', 400);
+    }
+    if (payload.reviewMode === 'scheduled' && !payload.reviewReleaseAt) {
+      throw new AppError('حدد موعد فتح المراجعة أو اختر فتحًا يدويًا', 400);
+    }
+    if (payload.reviewMode && payload.reviewMode !== 'scheduled') payload.reviewReleaseAt = null;
+    if (payload.maxAttempts !== undefined) payload.maxAttempts = Math.floor(Number(payload.maxAttempts));
     const exam = await Exam.findByIdAndUpdate(req.params.id, payload, {
       new: true,
       runValidators: true
@@ -513,7 +552,7 @@ const updateExamTotalMarks = async (examId: string, onModel: 'Exam' | 'Assignmen
 // Get all users (for admin panel)
 export const getAllUsers = async (req: Request, res: Response): Promise<void> => {
   try {
-    const { search, educationalLevel, role = 'student' } = req.query;
+    const { search, educationalLevel, role = 'student', page = 1, limit = 20 } = req.query;
     const query: any = {};
     if (role !== 'all') query.role = role;
     if (educationalLevel) query.educationalLevel = educationalLevel;
@@ -521,17 +560,25 @@ export const getAllUsers = async (req: Request, res: Response): Promise<void> =>
       const pattern = new RegExp(String(search).trim().replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'i');
       query.$or = [{ name: pattern }, { phone: pattern }];
     }
-    const users = await User.find(query)
-      .select('-password')
-      .populate('educationalLevel', 'name nameAr level year order')
-      .sort({ createdAt: -1 })
-      .limit(200);
+    const result: PaginationResult<any> = await paginate(
+      User,
+      query,
+      { page: Number(page), limit: Number(limit) },
+      { createdAt: -1 }
+    );
+    const populated = await User.populate(result.data, { path: 'educationalLevel', select: 'name nameAr level year order' });
+    const users = populated.map((user: any) => {
+      const data = user.toObject ? user.toObject() : { ...user };
+      delete data.password;
+      return data;
+    });
     
     res.status(200).json({
       status: 'success',
       data: {
         users
-      }
+      },
+      pagination: result.pagination
     });
   } catch (error: any) {
     res.status(500).json({
@@ -963,12 +1010,17 @@ export const getAssignmentSubmissions = async (req: Request, res: Response): Pro
 export const createLesson = async (req: Request, res: Response): Promise<void> => {
   try {
     const { courseId, title, description = '', duration = 0, order = 0, videoUrl = '', videoProvider, videoId } = req.body;
-    const video = normalizeVideoSource(videoUrl, videoProvider, videoId);
+    const hasVideo = Boolean(String(videoUrl || '').trim() || (videoProvider && videoId));
+    const video = hasVideo ? normalizeVideoSource(videoUrl, videoProvider, videoId) : null;
     const lesson = await Lesson.create({
       courseId, title, description, duration, order,
-      videoUrl: video.embedUrl,
-      videoProvider: video.provider,
-      videoId: video.videoId
+      ...(video ? {
+        videoUrl: video.embedUrl,
+        videoProvider: video.provider,
+        videoId: video.videoId,
+        bunnyVideoId: video.provider === 'bunny' ? video.videoId : undefined,
+        videoStatus: video.provider === 'bunny' ? 'processing' : 'ready'
+      } : {})
     });
     
     res.status(201).json({
@@ -1002,10 +1054,25 @@ export const updateLesson = async (req: Request, res: Response): Promise<void> =
       .filter((field) => req.body[field] !== undefined)
       .map((field) => [field, req.body[field]]));
     if (req.body.videoUrl !== undefined || req.body.videoProvider !== undefined || req.body.videoId !== undefined) {
-      const video = normalizeVideoSource(req.body.videoUrl || current.videoUrl || '', req.body.videoProvider || current.videoProvider, req.body.videoId || current.videoId);
-      payload.videoUrl = video.embedUrl;
-      payload.videoProvider = video.provider;
-      payload.videoId = video.videoId;
+      const sourceWasProvided = req.body.videoUrl !== undefined;
+      const provider = req.body.videoProvider || current.videoProvider;
+      const videoId = req.body.videoId !== undefined ? req.body.videoId : (sourceWasProvided ? undefined : current.videoId);
+      const source = sourceWasProvided ? String(req.body.videoUrl || '').trim() : String(current.videoUrl || '').trim();
+      const hasVideo = Boolean(source || (provider && videoId));
+      if (!hasVideo) {
+        payload.videoUrl = '';
+        payload.videoProvider = undefined;
+        payload.videoId = undefined;
+        payload.bunnyVideoId = undefined;
+        payload.videoStatus = 'failed';
+      } else {
+        const video = normalizeVideoSource(source, provider, videoId);
+        payload.videoUrl = video.embedUrl;
+        payload.videoProvider = video.provider;
+        payload.videoId = video.videoId;
+        payload.bunnyVideoId = video.provider === 'bunny' ? video.videoId : undefined;
+        payload.videoStatus = video.provider === 'bunny' ? 'processing' : 'ready';
+      }
     }
     const lesson = await Lesson.findByIdAndUpdate(req.params.id, payload, {
       new: true,
@@ -1040,6 +1107,44 @@ export const updateLesson = async (req: Request, res: Response): Promise<void> =
         message: error.message || 'Server Error'
       });
     }
+  }
+};
+
+export const createBunnyUpload = async (req: Request, res: Response): Promise<void> => {
+  try {
+    if (!isBunnyConfigured()) throw new AppError('رفع Bunny غير مفعّل في إعدادات السيرفر.', 503);
+    const title = String(req.body?.title || '').trim();
+    if (!title) throw new AppError('عنوان الفيديو مطلوب.', 400);
+    const upload = await createBunnyUploadSession(title);
+    res.status(201).json({ status: 'success', data: { upload } });
+  } catch (error: any) {
+    res.status(error.statusCode || 500).json({
+      status: error.statusCode && error.statusCode < 500 ? 'fail' : 'error',
+      message: error.message || 'تعذر تجهيز رفع الفيديو إلى Bunny.'
+    });
+  }
+};
+
+export const completeBunnyUpload = async (req: Request, res: Response): Promise<void> => {
+  try {
+    const { lessonId } = req.params;
+    const videoId = String(req.body?.videoId || '').trim();
+    if (!videoId) throw new AppError('معرّف فيديو Bunny مطلوب.', 400);
+    const lesson = await Lesson.findById(lessonId);
+    if (!lesson) throw new AppError('الدرس غير موجود.', 404);
+    const libraryId = process.env.BUNNY_STREAM_LIBRARY_ID || 'library';
+    lesson.videoProvider = 'bunny';
+    lesson.videoId = videoId;
+    lesson.bunnyVideoId = videoId;
+    lesson.videoUrl = `https://iframe.mediadelivery.net/embed/${libraryId}/${videoId}`;
+    lesson.videoStatus = 'processing';
+    await lesson.save();
+    res.status(200).json({ status: 'success', data: { lesson } });
+  } catch (error: any) {
+    res.status(error.statusCode || 500).json({
+      status: error.statusCode && error.statusCode < 500 ? 'fail' : 'error',
+      message: error.message || 'تعذر ربط فيديو Bunny بالدرس.'
+    });
   }
 };
 
@@ -1171,6 +1276,114 @@ export const getStudentAccess = async (req: Request, res: Response): Promise<voi
     res.status(error.statusCode || 500).json({
       status: error.statusCode && error.statusCode < 500 ? 'fail' : 'error',
       message: error.message || 'تعذر تحميل صلاحيات الطالب'
+    });
+  }
+};
+
+export const getStudentOverview = async (req: Request, res: Response): Promise<void> => {
+  try {
+    const student = await User.findOne({ _id: req.params.userId, role: 'student' })
+      .select('-password')
+      .populate('educationalLevel', 'name nameAr level year order')
+      .lean();
+    if (!student) throw new AppError('الطالب غير موجود', 404);
+
+    const studentLevelId = (student.educationalLevel as any)?._id || student.educationalLevel;
+    const courses = await Course.find({ educationalLevel: studentLevelId }).select('_id').lean();
+    const courseIds = courses.map((course: any) => course._id);
+    const [courseAccess, lessonAccess, lessons, examAttempts, videoLessons, videoTotals, latestAttempts] = await Promise.all([
+      CourseAccess.find({ userId: student._id, courseId: { $in: courseIds }, enabled: true }).select('courseId').lean(),
+      LessonAccess.find({ userId: student._id }).select('lessonId enabled').lean(),
+      Lesson.find({ courseId: { $in: courseIds } }).select('_id courseId').lean(),
+      Submission.countDocuments({ userId: student._id, onModel: 'Exam' }),
+      VideoProgress.countDocuments({ userId: student._id }),
+      VideoProgress.aggregate([
+        { $match: { userId: student._id } },
+        { $group: { _id: null, watchedSeconds: { $sum: '$watchedSeconds' }, completed: { $sum: { $cond: [{ $gte: ['$completionPercent', 95] }, 1, 0] } } } }
+      ]),
+      Submission.find({ userId: student._id, onModel: 'Exam' }).sort({ submittedAt: -1 }).limit(5).populate('examId', 'title').lean()
+    ]);
+    const openCourseIds = new Set(courseAccess.map((access: any) => String(access.courseId)));
+    const lessonOverrides = new Map(lessonAccess.map((access: any) => [String(access.lessonId), access.enabled]));
+    const openLessons = lessons.filter((lesson: any) => openCourseIds.has(String(lesson.courseId)) && lessonOverrides.get(String(lesson._id)) !== false).length;
+
+    res.status(200).json({
+      status: 'success',
+      data: {
+        user: student,
+        stats: {
+          openCourses: courseAccess.length,
+          openLessons,
+          examAttempts,
+          videoLessons,
+          watchedSeconds: videoTotals[0]?.watchedSeconds || 0,
+          completedVideos: videoTotals[0]?.completed || 0
+        },
+        latestAttempts: latestAttempts.map((item: any) => ({
+          ...item,
+          percentage: item.totalMarks ? Math.round((item.score / item.totalMarks) * 100) : 0
+        }))
+      }
+    });
+  } catch (error: any) {
+    res.status(error.statusCode || 500).json({
+      status: error.statusCode && error.statusCode < 500 ? 'fail' : 'error',
+      message: error.message || 'تعذر تحميل ملخص الطالب'
+    });
+  }
+};
+
+export const getStudentExamAttempts = async (req: Request, res: Response): Promise<void> => {
+  try {
+    const student = await User.exists({ _id: req.params.userId, role: 'student' });
+    if (!student) throw new AppError('الطالب غير موجود', 404);
+    const query: any = { userId: req.params.userId, onModel: 'Exam' };
+    if (req.query.examId) query.examId = req.query.examId;
+    const result: PaginationResult<any> = await paginate(
+      Submission,
+      query,
+      { page: Number(req.query.page), limit: Number(req.query.limit) },
+      { submittedAt: -1 }
+    );
+    const data = await Submission.populate(result.data, { path: 'examId', select: 'title type maxAttempts reviewMode' });
+    res.status(200).json({
+      status: 'success',
+      data: data.map((item: any) => {
+        const serialized = item.toObject ? item.toObject() : item;
+        return {
+          ...serialized,
+          percentage: item.totalMarks ? Math.round((item.score / item.totalMarks) * 100) : 0,
+          isPassed: item.totalMarks ? item.score / item.totalMarks >= 0.5 : false
+        };
+      }),
+      pagination: result.pagination
+    });
+  } catch (error: any) {
+    res.status(error.statusCode || 500).json({
+      status: error.statusCode && error.statusCode < 500 ? 'fail' : 'error',
+      message: error.message || 'تعذر تحميل محاولات الطالب'
+    });
+  }
+};
+
+export const getStudentVideoActivity = async (req: Request, res: Response): Promise<void> => {
+  try {
+    const student = await User.exists({ _id: req.params.userId, role: 'student' });
+    if (!student) throw new AppError('الطالب غير موجود', 404);
+    const result: PaginationResult<any> = await paginate(
+      VideoProgress,
+      { userId: req.params.userId },
+      { page: Number(req.query.page), limit: Number(req.query.limit) },
+      { lastWatchedAt: -1 }
+    );
+    const data = await VideoProgress.populate(result.data, [
+      { path: 'lessonId', select: 'title duration courseId', populate: { path: 'courseId', select: 'title term' } }
+    ]);
+    res.status(200).json({ status: 'success', data, pagination: result.pagination });
+  } catch (error: any) {
+    res.status(error.statusCode || 500).json({
+      status: error.statusCode && error.statusCode < 500 ? 'fail' : 'error',
+      message: error.message || 'تعذر تحميل نشاط فيديو الطالب'
     });
   }
 };

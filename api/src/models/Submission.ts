@@ -13,6 +13,9 @@ export interface ISubmission extends Document {
   score: number;
   totalMarks: number;
   submittedAt: Date;
+  attemptId?: mongoose.Types.ObjectId;
+  attemptNumber?: number;
+  submittedReason?: 'manual' | 'timeout' | 'legacy';
   isGraded: boolean;
   gradedAt: Date;
   gradedBy: mongoose.Types.ObjectId; // Admin/teacher who graded (if manually graded)
@@ -59,6 +62,23 @@ const SubmissionSchema: Schema = new Schema({
     type: Date,
     default: Date.now
   },
+  attemptId: {
+    type: Schema.Types.ObjectId,
+    ref: 'ExamAttempt',
+    required: false
+  },
+  attemptNumber: {
+    type: Number,
+    required: false,
+    min: 1,
+    default: 1
+  },
+  submittedReason: {
+    type: String,
+    enum: ['manual', 'timeout', 'legacy'],
+    required: false,
+    default: 'manual'
+  },
   isGraded: {
     type: Boolean,
     default: false
@@ -82,5 +102,6 @@ SubmissionSchema.index({ examId: 1 });
 SubmissionSchema.index({ onModel: 1 });
 SubmissionSchema.index({ submittedAt: -1 });
 SubmissionSchema.index({ isGraded: 1 });
+SubmissionSchema.index({ attemptId: 1 }, { unique: true, sparse: true });
 
 export default mongoose.model<ISubmission>('Submission', SubmissionSchema);

@@ -11,6 +11,9 @@ export interface IExam extends Document {
   type: 'course' | 'general';
   isActive: boolean;
   mandatoryAttendance: boolean; // New field to indicate if attendance is mandatory
+  maxAttempts: number;
+  reviewMode: 'closed' | 'open' | 'scheduled';
+  reviewReleaseAt?: Date | null;
   createdAt: Date;
   updatedAt: Date;
 }
@@ -64,6 +67,21 @@ const ExamSchema: Schema = new Schema({
   mandatoryAttendance: {
     type: Boolean,
     default: false // By default, attendance is not mandatory
+  },
+  maxAttempts: {
+    type: Number,
+    min: 1,
+    default: 1
+  },
+  reviewMode: {
+    type: String,
+    enum: ['closed', 'open', 'scheduled'],
+    default: 'closed'
+  },
+  reviewReleaseAt: {
+    type: Date,
+    required: false,
+    default: null
   }
 }, {
   timestamps: true

@@ -5,7 +5,8 @@ import {
   getCourses, 
   getCourseById, 
   getCourseLessons,
-  getLessonVideoUrl
+  getLessonVideoUrl,
+  recordVideoEvent
 } from '../controllers/courseController';
 
 const router = Router();
@@ -18,5 +19,6 @@ router.get('/', getCourses);
 router.get('/:id', getCourseById);
 router.get('/:id/lessons', getCourseLessons);
 router.get('/:lessonId/video-url', getLessonVideoUrl);
+router.post('/:lessonId/video-events', recordVideoEvent);
 
 export default router;
