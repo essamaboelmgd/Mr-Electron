@@ -123,13 +123,13 @@
 }
 
 /* Authoritative admin shell layout: the sidebar is a measured grid column, not a floating sibling. */
-:root { --admin-header-height: 74px; --admin-sidebar-width: 264px; --admin-z-header: 30; --admin-z-overlay: 55; --admin-z-drawer: 60; --admin-z-floating: 70; }
+:root { --admin-header-height: 74px; --admin-sidebar-width: 264px; --admin-z-header: 80; --admin-z-overlay: 55; --admin-z-drawer: 60; --admin-z-floating: 70; }
 html, body { width: 100%; overflow-x: hidden; }
-.admin-topbar { z-index: var(--admin-z-header); }
+.admin-topbar { position: fixed; inset-block-start: 0; inset-inline-start: 0; inset-inline-end: 0; width: 100%; height: var(--admin-header-height); z-index: var(--admin-z-header); }
 .admin-topbar-inner { width: 100%; max-width: none; }
 .admin-profile-menu { inset-inline-start: auto; inset-inline-end: 0; width: min(220px, calc(100vw - 24px)); max-height: calc(100dvh - 100px); overflow-y: auto; z-index: var(--admin-z-drawer); }
 .admin-sidebar-slot { grid-column: 2; grid-row: 1; min-width: 0; min-height: calc(100dvh - var(--admin-header-height)); }
-.admin-body { display: grid; grid-template-columns: minmax(0, 1fr) var(--admin-sidebar-width); direction: ltr; width: 100%; max-width: none; margin: 0; min-height: calc(100dvh - var(--admin-header-height)); align-items: stretch; }
+.admin-body { display: grid; grid-template-columns: minmax(0, 1fr) var(--admin-sidebar-width); direction: ltr; width: 100%; max-width: none; margin: var(--admin-header-height) 0 0; min-height: calc(100dvh - var(--admin-header-height)); align-items: stretch; }
 .admin-main { grid-column: 1; grid-row: 1; direction: rtl; width: auto; min-width: 0; }
 .admin-frame { width: 100%; max-width: 1140px; margin: 0 auto; }
 .admin-sidebar { grid-column: auto; grid-row: auto; width: 100%; height: calc(100dvh - var(--admin-header-height)); min-height: 0; position: sticky; top: var(--admin-header-height); overflow: hidden; border-inline-start: 0; border-inline-end: 1px solid var(--admin-line); }
@@ -293,4 +293,8 @@ body { overflow-x: hidden; }
 
 @media (min-width: 761px) and (max-width: 900px) {
   .admin-body { grid-template-columns: minmax(0, 1fr) var(--admin-sidebar-width); }
+}
+
+@media print {
+  .admin-body { margin-top: 0; }
 }

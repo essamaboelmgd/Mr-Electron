@@ -260,13 +260,13 @@ h1, h2, h3, p { margin-top: 0; }
 }
 
 /* Authoritative shell layout: one grid item per surface, with the drawer out of flow on mobile. */
-:root { --app-header-height: 76px; --app-sidebar-width: 264px; --z-header: 30; --z-overlay: 55; --z-drawer: 60; --z-floating: 70; }
+:root { --app-header-height: 76px; --app-sidebar-width: 264px; --z-header: 80; --z-overlay: 55; --z-drawer: 60; --z-floating: 70; }
 html, body { width: 100%; overflow-x: hidden; }
-.topbar { z-index: var(--z-header); }
+.topbar { position: fixed; inset-block-start: 0; inset-inline-start: 0; inset-inline-end: 0; width: 100%; height: var(--app-header-height); z-index: var(--z-header); }
 .topbar-inner { width: 100%; max-width: none; }
 .profile-menu { inset-inline-start: auto; inset-inline-end: 0; width: min(220px, calc(100vw - 24px)); max-height: calc(100dvh - 100px); overflow-y: auto; z-index: var(--z-drawer); }
 .sidebar-slot { grid-column: 2; grid-row: 1; min-width: 0; min-height: calc(100dvh - var(--app-header-height)); }
-.app-body { display: grid; grid-template-columns: minmax(0, 1fr) var(--app-sidebar-width); direction: ltr; width: 100%; max-width: none; margin: 0; min-height: calc(100dvh - var(--app-header-height)); align-items: stretch; }
+.app-body { display: grid; grid-template-columns: minmax(0, 1fr) var(--app-sidebar-width); direction: ltr; width: 100%; max-width: none; margin: var(--app-header-height) 0 0; min-height: calc(100dvh - var(--app-header-height)); align-items: stretch; }
 .app-main { grid-column: 1; grid-row: 1; direction: rtl; width: auto; min-width: 0; }
 .content-frame { width: 100%; max-width: 1120px; margin: 0 auto; }
 .sidebar { grid-column: auto; grid-row: auto; width: 100%; height: calc(100dvh - var(--app-header-height)); min-height: 0; position: sticky; top: var(--app-header-height); overflow: hidden; border-inline-start: 0; border-inline-end: 1px solid var(--line); }
