@@ -276,6 +276,7 @@ html, body { width: 100%; overflow-x: hidden; }
 .nav-item:focus-visible, .mobile-menu-button:focus-visible, .mobile-overlay:focus-visible, .profile-button:focus-visible, .profile-menu a:focus-visible, .profile-menu button:focus-visible { outline: 3px solid rgba(232,166,75,.55); outline-offset: 3px; }
 .sidebar-study-card { margin-top: 26px; }
 .sidebar-note { margin-top: 15px; }
+.lesson-viewer { scroll-margin-top: calc(var(--app-header-height) + 18px); }
 .exam-card { min-height: 320px; }
 .exam-card-actions { display: grid; gap: 8px; margin-top: auto; }
 .exam-card-actions .full-button { margin-top: 0; }
