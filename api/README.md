@@ -1,6 +1,6 @@
-# Genius Educational Platform - Backend API
+# electron Educational Platform - Backend API
 
-This is the backend API for the Genius educational platform, built with Node.js, Express, and MongoDB.
+This is the backend API for the electron educational platform, built with Node.js, Express, and MongoDB.
 
 ## Features Implemented
 
@@ -64,7 +64,7 @@ PORT=3000
 NODE_ENV=development
 
 # Database Configuration
-MONGODB_URI=mongodb://localhost:27017/genius_edu
+MONGODB_URI=mongodb://localhost:27017/electron_edu
 
 # JWT Configuration
 JWT_SECRET=your_jwt_secret_here

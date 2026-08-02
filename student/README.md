@@ -1,8 +1,8 @@
-# Genius - Student Web Platform (Arabic / RTL)
+# electron - Student Web Platform (Arabic / RTL)
 
 An Arabic-first educational platform for math teacher Mohamed El-Hawary built with React, TypeScript, and Tailwind CSS.
 
-**URL**: https://genius-platform.com
+**URL**: https://electron-platform.com
 
 ## Quick Start
 

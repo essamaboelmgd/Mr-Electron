@@ -49,7 +49,7 @@ export default function Register() {
     const newErrors: Record<string, string> = {};
 
     if (!formData.name.trim()) newErrors.name = 'الاسم الكامل مطلوب';
-    
+
     const phoneError = validatePhone(formData.phone, 'رقم تليفون الطالب');
     if (phoneError) newErrors.phone = phoneError;
 
@@ -57,7 +57,7 @@ export default function Register() {
     if (guardianError) newErrors.guardianPhone = guardianError;
 
     if (!formData.educationalLevel) newErrors.educationalLevel = 'المستوي الدراسي مطلوب';
-    
+
     if (!formData.gender) newErrors.gender = 'الجنس مطلوب';
 
     if (!formData.password) {
@@ -89,11 +89,11 @@ export default function Register() {
         educationalLevel: formData.educationalLevel,
         password: formData.password,
       });
-      
+
       // Store token and user data in localStorage
       setAuthToken(result.token);
       setAuthUser(result.data.user);
-      
+
       toast.success('تم إنشاء الحساب بنجاح');
       navigate('/dashboard');
     } catch (error: any) {
@@ -113,7 +113,7 @@ export default function Register() {
     <div className="min-h-screen bg-background flex items-center justify-center p-4">
       <div className="w-full max-w-md">
         <div className="text-center mb-8">
-          <h1 className="text-3xl font-bold text-primary mb-2">genius</h1>
+          <h1 className="text-3xl font-bold text-primary mb-2">electron</h1>
           <p className="text-sm text-muted-foreground">منصة تعليمية</p>
         </div>
 
@@ -218,9 +218,9 @@ export default function Register() {
               {errors.confirmPassword && <p className="text-sm text-danger mt-1">{errors.confirmPassword}</p>}
             </div>
 
-            <Button 
-              type="submit" 
-              className="w-full hover:scale-105 transition-all duration-200" 
+            <Button
+              type="submit"
+              className="w-full hover:scale-105 transition-all duration-200"
               disabled={loading}
             >
               {loading ? 'جاري التحميل...' : 'إنشاء حساب'}
@@ -228,10 +228,10 @@ export default function Register() {
           </form>
 
           <div className="mt-6 text-center">
-            <Button 
-              type="button" 
-              variant="outline" 
-              className="w-full bg-background text-foreground border border-primary hover:bg-primary/10 hover:scale-105 transition-all duration-200" 
+            <Button
+              type="button"
+              variant="outline"
+              className="w-full bg-background text-foreground border border-primary hover:bg-primary/10 hover:scale-105 transition-all duration-200"
               onClick={() => navigate('/login')}
             >
               لديك حساب بالفعل؟ تسجيل دخول

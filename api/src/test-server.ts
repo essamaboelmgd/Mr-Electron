@@ -10,7 +10,7 @@ const app = express();
 // Simple route
 app.get('/', (req, res) => {
   res.json({
-    message: 'Genius API Test Server',
+    message: 'electron API Test Server',
     timestamp: new Date().toISOString()
   });
 });
@@ -19,7 +19,7 @@ app.get('/', (req, res) => {
 app.get('/api/health', (req, res) => {
   res.status(200).json({
     status: 'success',
-    message: 'Genius API is running',
+    message: 'electron API is running',
     timestamp: new Date().toISOString()
   });
 });

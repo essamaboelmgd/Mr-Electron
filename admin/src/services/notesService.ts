@@ -123,7 +123,7 @@ export const createNote = async (noteData: Partial<Note> | FormData): Promise<No
         'Content-Type': 'multipart/form-data',
       },
     } : {};
-    
+
     const response = await api.post('/admin/notes', noteData, config);
     return response.data.data.note;
   } catch (error) {
@@ -139,7 +139,7 @@ export const updateNote = async (id: string, noteData: Partial<Note> | FormData)
         'Content-Type': 'multipart/form-data',
       },
     } : {};
-    
+
     const response = await api.put(`/admin/notes/${id}`, noteData, config);
     return response.data.data.note;
   } catch (error) {
@@ -164,7 +164,7 @@ export const createNoteOrder = async (orderData: Omit<NoteOrder, '_id' | 'create
   } catch (error) {
     // Fallback to localStorage if API is not available
     console.warn('API not available, using localStorage');
-    const orders = JSON.parse(localStorage.getItem('genius_note_orders') || '[]');
+    const orders = JSON.parse(localStorage.getItem('electron_note_orders') || '[]');
     const newOrder = {
       _id: `order_${Date.now()}`,
       ...orderData,
@@ -172,7 +172,7 @@ export const createNoteOrder = async (orderData: Omit<NoteOrder, '_id' | 'create
       updatedAt: new Date().toISOString(),
     };
     orders.push(newOrder);
-    localStorage.setItem('genius_note_orders', JSON.stringify(orders));
+    localStorage.setItem('electron_note_orders', JSON.stringify(orders));
     return newOrder;
   }
 };
@@ -185,7 +185,7 @@ export const getNoteOrders = async (userId: string): Promise<NoteOrder[]> => {
   } catch (error) {
     // Fallback to localStorage if API is not available
     console.warn('API not available, using localStorage');
-    return JSON.parse(localStorage.getItem('genius_note_orders') || '[]');
+    return JSON.parse(localStorage.getItem('electron_note_orders') || '[]');
   }
 };
 
@@ -194,7 +194,7 @@ export const getAllNoteOrders = async (page: number = 1, limit: number = 10, sta
   try {
     const params: any = { page, limit };
     if (status) params.status = status;
-    
+
     const response = await api.get('/admin/notes/orders', { params });
     return {
       orders: response.data.data,

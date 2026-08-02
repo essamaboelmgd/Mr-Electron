@@ -26,7 +26,7 @@ dist-ssr
 *.sln
 *.sw?
 landingpage/landingpage.zip
-genius.code-workspace
+electron.code-workspace
 admin.rar
 api.rar
 landingpage.rar

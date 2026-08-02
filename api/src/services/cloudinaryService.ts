@@ -10,7 +10,7 @@ const bufferToStream = (buffer: Buffer): Readable => {
 };
 
 // Upload image to Cloudinary
-export const uploadImage = async (buffer: Buffer, folder: string = 'genius'): Promise<string> => {
+export const uploadImage = async (buffer: Buffer, folder: string = 'electron'): Promise<string> => {
   return new Promise((resolve, reject) => {
     const uploadStream = cloudinary.uploader.upload_stream(
       {
@@ -25,7 +25,7 @@ export const uploadImage = async (buffer: Buffer, folder: string = 'genius'): Pr
         }
       }
     );
-    
+
     bufferToStream(buffer).pipe(uploadStream);
   });
 };
@@ -46,26 +46,26 @@ export const deleteImage = async (publicId: string): Promise<void> => {
 // Extract public ID from Cloudinary URL
 export const extractPublicId = (url: string): string => {
   if (!url || !url.includes('cloudinary.com')) return '';
-  
+
   try {
     // Remove query parameters if any
     const urlWithoutParams = url.split('?')[0];
-    
+
     // Split by '/' and find the 'upload' part
     const parts = urlWithoutParams.split('/');
     const uploadIndex = parts.indexOf('upload');
-    
+
     if (uploadIndex === -1 || uploadIndex >= parts.length - 1) {
       return '';
     }
-    
+
     // Get all parts after 'upload'
     const afterUpload = parts.slice(uploadIndex + 1);
-    
+
     // Join them back and remove file extension
     const fullPath = afterUpload.join('/');
     const publicId = fullPath.replace(/\.[^/.]+$/, ''); // Remove extension
-    
+
     return publicId;
   } catch (error) {
     console.error('Error extracting public ID from Cloudinary URL:', error);
@@ -74,5 +74,5 @@ export const extractPublicId = (url: string): string => {
 };
 
 // Test the extractPublicId function
-// const testUrl = 'https://res.cloudinary.com/dbfscdd0s/image/upload/v1730123456/genius/courses/sample_image.jpg';
+// const testUrl = 'https://res.cloudinary.com/dbfscdd0s/image/upload/v1730123456/electron/courses/sample_image.jpg';
 // console.log('Extracted public ID:', extractPublicId(testUrl));

@@ -135,7 +135,7 @@ export const createNoteOrder = async (orderData: Omit<NoteOrder, '_id' | 'create
   } catch (error) {
     // Fallback to localStorage if API is not available
     console.warn('API not available, using localStorage');
-    const orders = JSON.parse(localStorage.getItem('genius_note_orders') || '[]');
+    const orders = JSON.parse(localStorage.getItem('electron_note_orders') || '[]');
     const newOrder = {
       _id: `order_${Date.now()}`,
       ...orderData,
@@ -143,7 +143,7 @@ export const createNoteOrder = async (orderData: Omit<NoteOrder, '_id' | 'create
       updatedAt: new Date().toISOString(),
     };
     orders.push(newOrder);
-    localStorage.setItem('genius_note_orders', JSON.stringify(orders));
+    localStorage.setItem('electron_note_orders', JSON.stringify(orders));
     return newOrder;
   }
 };
@@ -156,6 +156,6 @@ export const getNoteOrders = async (userId: string): Promise<NoteOrder[]> => {
   } catch (error) {
     // Fallback to localStorage if API is not available
     console.warn('API not available, using localStorage');
-    return JSON.parse(localStorage.getItem('genius_note_orders') || '[]');
+    return JSON.parse(localStorage.getItem('electron_note_orders') || '[]');
   }
 };

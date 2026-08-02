@@ -1,4 +1,4 @@
-# Genius - Student Web Platform
+# electron - Student Web Platform
 
 A modern Arabic (RTL) student web platform for math teacher Mohamed El-Hawary built with React, TypeScript, Tailwind CSS, and Vite.
 
@@ -100,7 +100,7 @@ Replace course fetching:
 
 ```typescript
 // Current (mock):
-getAll: async () => getFromStorage('genius_courses', [])
+getAll: async () => getFromStorage('electron_courses', [])
 
 // Replace with:
 getAll: async () => {

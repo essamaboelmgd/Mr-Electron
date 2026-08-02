@@ -103,41 +103,41 @@ const saveToStorage = <T>(key: string, value: T): void => {
 
 // Initialize storage with mock data
 const initStorage = () => {
-  if (!localStorage.getItem('genius_users')) {
-    saveToStorage('genius_users', usersData);
+  if (!localStorage.getItem('electron_users')) {
+    saveToStorage('electron_users', usersData);
   }
-  if (!localStorage.getItem('genius_courses')) {
-    saveToStorage('genius_courses', coursesData);
+  if (!localStorage.getItem('electron_courses')) {
+    saveToStorage('electron_courses', coursesData);
   }
-  if (!localStorage.getItem('genius_subscriptions')) {
-    saveToStorage('genius_subscriptions', subscriptionsData);
+  if (!localStorage.getItem('electron_subscriptions')) {
+    saveToStorage('electron_subscriptions', subscriptionsData);
   }
-  if (!localStorage.getItem('genius_exams')) {
-    saveToStorage('genius_exams', examsData);
+  if (!localStorage.getItem('electron_exams')) {
+    saveToStorage('electron_exams', examsData);
   }
   // Always initialize assignments to ensure they're loaded
-  saveToStorage('genius_assignments', assignmentsData);
-  if (!localStorage.getItem('genius_questions')) {
-    saveToStorage('genius_questions', questionsData);
+  saveToStorage('electron_assignments', assignmentsData);
+  if (!localStorage.getItem('electron_questions')) {
+    saveToStorage('electron_questions', questionsData);
   }
-  if (!localStorage.getItem('genius_notifications')) {
-    saveToStorage('genius_notifications', notificationsData);
+  if (!localStorage.getItem('electron_notifications')) {
+    saveToStorage('electron_notifications', notificationsData);
   }
 };
 
 // Function to reset storage (for testing purposes)
 export const resetStorage = () => {
-  saveToStorage('genius_users', usersData);
-  saveToStorage('genius_courses', coursesData);
-  saveToStorage('genius_subscriptions', subscriptionsData);
-  saveToStorage('genius_exams', examsData);
-  saveToStorage('genius_assignments', assignmentsData);
-  saveToStorage('genius_questions', questionsData);
-  saveToStorage('genius_notifications', notificationsData);
+  saveToStorage('electron_users', usersData);
+  saveToStorage('electron_courses', coursesData);
+  saveToStorage('electron_subscriptions', subscriptionsData);
+  saveToStorage('electron_exams', examsData);
+  saveToStorage('electron_assignments', assignmentsData);
+  saveToStorage('electron_questions', questionsData);
+  saveToStorage('electron_notifications', notificationsData);
 };
 
 // Always initialize assignments to ensure they're loaded
-saveToStorage('genius_assignments', assignmentsData);
+saveToStorage('electron_assignments', assignmentsData);
 initStorage();
 
 // Auth API
@@ -146,116 +146,116 @@ export const mockApi = {
   auth: {
     login: async (phone: string, password: string): Promise<{ success: boolean; user?: User; error?: string }> => {
       await delay(500);
-      const users: User[] = getFromStorage('genius_users', []);
+      const users: User[] = getFromStorage('electron_users', []);
       const user = users.find(u => u.phone === phone && u.password === password);
-      
+
       if (user) {
         const { password: _, ...userWithoutPassword } = user;
-        saveToStorage('genius_currentUser', userWithoutPassword);
+        saveToStorage('electron_currentUser', userWithoutPassword);
         return { success: true, user: userWithoutPassword };
       }
       return { success: false, error: 'رقم الموبايل أو كلمة المرور غير صحيحة' };
     },
-    
+
     register: async (userData: Omit<User, 'id'>): Promise<{ success: boolean; user?: User; error?: string }> => {
       await delay(600);
-      const users: User[] = getFromStorage('genius_users', []);
-      
+      const users: User[] = getFromStorage('electron_users', []);
+
       if (users.some(u => u.phone === userData.phone)) {
         return { success: false, error: 'رقم الموبايل مسجل بالفعل' };
       }
-      
+
       const newUser: User = { ...userData, id: `u${Date.now()}` };
       users.push(newUser);
-      saveToStorage('genius_users', users);
-      
+      saveToStorage('electron_users', users);
+
       const { password: _, ...userWithoutPassword } = newUser;
-      saveToStorage('genius_currentUser', userWithoutPassword);
+      saveToStorage('electron_currentUser', userWithoutPassword);
       return { success: true, user: userWithoutPassword };
     },
-    
+
     getCurrentUser: (): User | null => {
-      return getFromStorage('genius_currentUser', null);
+      return getFromStorage('electron_currentUser', null);
     },
-    
+
     logout: () => {
-      localStorage.removeItem('genius_currentUser');
+      localStorage.removeItem('electron_currentUser');
     },
   },
-  
+
   courses: {
     getAll: async (): Promise<Course[]> => {
       await delay(400);
-      return getFromStorage('genius_courses', []);
+      return getFromStorage('electron_courses', []);
     },
-    
+
     getById: async (id: string): Promise<Course | null> => {
       await delay(300);
-      const courses: Course[] = getFromStorage('genius_courses', []);
+      const courses: Course[] = getFromStorage('electron_courses', []);
       return courses.find(c => c.id === id) || null;
     },
   },
-  
+
   subscriptions: {
     getByUserId: async (userId: string): Promise<Subscription[]> => {
       await delay(400);
-      const subscriptions: Subscription[] = getFromStorage('genius_subscriptions', []);
+      const subscriptions: Subscription[] = getFromStorage('electron_subscriptions', []);
       return subscriptions.filter(s => s.userId === userId);
     },
-    
+
     create: async (subscription: Omit<Subscription, 'id'>): Promise<Subscription> => {
       await delay(600);
-      const subscriptions: Subscription[] = getFromStorage('genius_subscriptions', []);
+      const subscriptions: Subscription[] = getFromStorage('electron_subscriptions', []);
       const newSub: Subscription = { ...subscription, id: `s${Date.now()}` };
       subscriptions.push(newSub);
-      saveToStorage('genius_subscriptions', subscriptions);
+      saveToStorage('electron_subscriptions', subscriptions);
       return newSub;
     },
   },
-  
+
   exams: {
     getAll: async (): Promise<Exam[]> => {
       await delay(400);
-      return getFromStorage('genius_exams', []);
+      return getFromStorage('electron_exams', []);
     },
-    
+
     getQuestions: async (examId: string): Promise<Question[]> => {
       await delay(500);
-      const questions: Question[] = getFromStorage('genius_questions', []);
+      const questions: Question[] = getFromStorage('electron_questions', []);
       return questions.filter(q => q.examId === examId);
     },
   },
-  
+
   assignments: {
     getAll: async (): Promise<Assignment[]> => {
       await delay(400);
-      return getFromStorage('genius_assignments', []);
+      return getFromStorage('electron_assignments', []);
     },
-    
+
     getQuestions: async (assignmentId: string): Promise<Question[]> => {
       await delay(500);
-      const questions: Question[] = getFromStorage('genius_questions', []);
+      const questions: Question[] = getFromStorage('electron_questions', []);
       // For now, we'll use the same questions as exams but this could be different in the future
       return questions.filter(q => q.examId === assignmentId);
     },
   },
-  
+
   notifications: {
     getByUserId: async (userId: string): Promise<Notification[]> => {
       await delay(300);
-      const notifications: Notification[] = getFromStorage('genius_notifications', []);
-      return notifications.filter(n => n.userId === userId).sort((a, b) => 
+      const notifications: Notification[] = getFromStorage('electron_notifications', []);
+      return notifications.filter(n => n.userId === userId).sort((a, b) =>
         new Date(b.time).getTime() - new Date(a.time).getTime()
       );
     },
-    
+
     markAsRead: async (notificationId: string): Promise<void> => {
       await delay(200);
-      const notifications: Notification[] = getFromStorage('genius_notifications', []);
+      const notifications: Notification[] = getFromStorage('electron_notifications', []);
       const notification = notifications.find(n => n.id === notificationId);
       if (notification) {
         notification.read = true;
-        saveToStorage('genius_notifications', notifications);
+        saveToStorage('electron_notifications', notifications);
       }
     },
   },

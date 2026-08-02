@@ -18,7 +18,7 @@ const courseStorage = new CloudinaryStorage({
   cloudinary: cloudinary,
   params: async (req, file) => {
     return {
-      folder: 'genius/courses'
+      folder: 'electron/courses'
     };
   }
 });
@@ -28,7 +28,7 @@ const noteStorage = new CloudinaryStorage({
   cloudinary: cloudinary,
   params: async (req, file) => {
     return {
-      folder: 'genius/notes'
+      folder: 'electron/notes'
     };
   }
 });
@@ -38,7 +38,7 @@ const questionStorage = new CloudinaryStorage({
   cloudinary: cloudinary,
   params: async (req, file) => {
     return {
-      folder: 'genius/questions'
+      folder: 'electron/questions'
     };
   }
 });
@@ -53,7 +53,7 @@ const fileFilter = (req: any, file: any, cb: any) => {
 };
 
 // Create multer instances for different folders
-const uploadCourseImage = multer({ 
+const uploadCourseImage = multer({
   storage: courseStorage,
   fileFilter,
   limits: {
@@ -61,7 +61,7 @@ const uploadCourseImage = multer({
   }
 });
 
-const uploadNoteImage = multer({ 
+const uploadNoteImage = multer({
   storage: noteStorage,
   fileFilter,
   limits: {
@@ -69,7 +69,7 @@ const uploadNoteImage = multer({
   }
 });
 
-const uploadQuestionImage = multer({ 
+const uploadQuestionImage = multer({
   storage: questionStorage,
   fileFilter,
   limits: {
