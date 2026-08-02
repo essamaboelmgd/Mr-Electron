@@ -1,0 +1,19 @@
+[
+  {
+    "id": "s1",
+    "userId": "u1",
+    "courseId": "c1",
+    "status": "active",
+    "subscribedAt": "2025-09-20T10:00:00Z",
+    "paymentMethod": "center"
+  },
+  {
+    "id": "s2",
+    "userId": "u1",
+    "courseId": "c2",
+    "status": "pending",
+    "subscribedAt": "2025-09-25T14:30:00Z",
+    "paymentMethod": "vodafone",
+    "vodafoneReceipt": "receipt_12345.jpg"
+  }
+]

@@ -1,0 +1,8 @@
+Primary Colors
+Primary: hsl(0, 79%, 31%) - A deep red color
+Primary Foreground: hsl(0, 0%, 100%) - White
+Secondary: hsl(0, 70%, 45%) - A medium red color
+Secondary Foreground: hsl(0, 0%, 100%) - White
+Accent Colors
+Accent: hsl(45, 100%, 51%) - A bright yellow/gold color
+Accent Foreground: hsl(0, 0%, 13%) - Very dark gray/black

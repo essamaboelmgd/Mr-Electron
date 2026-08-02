@@ -1,0 +1,32 @@
+[
+  {
+    "id": "e1",
+    "courseId": "c1",
+    "lessonId": "l1",
+    "title": "امتحان منتصف الفصل - الفيزياء",
+    "date": "2025-10-05T10:00:00Z",
+    "timeLimitMin": 30,
+    "totalMarks": 50,
+    "type": "course"
+  },
+  {
+    "id": "e2",
+    "courseId": "c2",
+    "lessonId": "l2",
+    "title": "امتحان حساب التفاضل",
+    "date": "2025-10-10T14:00:00Z",
+    "timeLimitMin": 45,
+    "totalMarks": 60,
+    "type": "course"
+  },
+  {
+    "id": "e3",
+    "courseId": null,
+    "lessonId": null,
+    "title": "امتحان عام - ثالثة ثانوي",
+    "date": "2025-10-15T09:00:00Z",
+    "timeLimitMin": 120,
+    "totalMarks": 100,
+    "type": "general"
+  }
+]

@@ -1,0 +1,62 @@
+[
+  {
+    "id": "a1",
+    "courseId": "c1",
+    "lessonId": "l1",
+    "title": "واجب الدرس الأول - الفيزياء",
+    "date": "2025-10-05T10:00:00Z",
+    "timeLimitMin": 30,
+    "totalMarks": 20,
+    "type": "course"
+  },
+  {
+    "id": "a2",
+    "courseId": "c1",
+    "lessonId": "l2",
+    "title": "واجب الدرس الثاني - الفيزياء",
+    "date": "2025-10-10T14:00:00Z",
+    "timeLimitMin": 45,
+    "totalMarks": 25,
+    "type": "course"
+  },
+  {
+    "id": "a3",
+    "courseId": "c2",
+    "lessonId": "l1",
+    "title": "واجب الدرس الأول - حساب التفاضل",
+    "date": "2025-10-12T09:00:00Z",
+    "timeLimitMin": 35,
+    "totalMarks": 30,
+    "type": "course"
+  },
+  {
+    "id": "a4",
+    "courseId": "c2",
+    "lessonId": "l2",
+    "title": "واجب الدرس الثاني - حساب التفاضل",
+    "date": "2025-10-15T09:00:00Z",
+    "timeLimitMin": 40,
+    "totalMarks": 25,
+    "type": "course"
+  },
+  {
+    "id": "a5",
+    "courseId": "c3",
+    "lessonId": "l1",
+    "title": "واجب الدرس الأول - الكيمياء",
+    "date": "2025-10-18T09:00:00Z",
+    "timeLimitMin": 30,
+    "totalMarks": 20,
+    "type": "course"
+  },
+  {
+    "id": "test1",
+    "courseId": "c1",
+    "lessonId": "l1",
+    "title": "واجب تجريبي للاختبار",
+    "date": "2025-10-05T10:00:00Z",
+    "timeLimitMin": 10,
+    "totalMarks": 10,
+    "type": "course"
+  }
+]

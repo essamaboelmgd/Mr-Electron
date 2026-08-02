@@ -1,0 +1,13 @@
+#root { min-height: 100vh; }
+
+.auth-atmosphere {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  z-index: 0;
+}
+
+.auth-page > :not(.auth-atmosphere) {
+  position: relative;
+  z-index: 1;
+}
