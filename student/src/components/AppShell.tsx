@@ -2,7 +2,6 @@ import { ReactNode, useEffect } from 'react';
 import { useNavigate } from '@/lib/router';
 import { useAuth } from '@/contexts/AuthContext';
 import { Header } from './Header';
-import { PlatformFooter } from './PlatformFooter';
 import { Sidebar } from './Sidebar';
 
 export const AppShell = ({ children }: { children: ReactNode }) => {
@@ -25,7 +24,6 @@ export const AppShell = ({ children }: { children: ReactNode }) => {
         <Sidebar />
         <main className="app-main">
           <div className="content-frame">{children}</div>
-          <PlatformFooter />
         </main>
       </div>
     </div>

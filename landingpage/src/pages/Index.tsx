@@ -177,7 +177,7 @@ export default function Index() {
         <section className="final-cta page-width"><div><span className="cta-mark"><Atom size={18} /></span><h2>جاهز تبدأ من صفك؟</h2><p>ادخل إلى منصة Mr Electron وشوف أول باب مفتوح لك.</p></div><a className="solid-button light-cta" href={loginUrl}>دخول إلى المنصة <ArrowLeft size={17} /></a></section>
       </main>
 
-      <footer className="landing-footer page-width"><a className="landing-brand" href="#home"><span className="landing-mark" aria-hidden="true"><i /><i /><i /></span><span><strong>mr electron</strong><small>منصة العلوم</small></span></a><span>منهج مرتب. فهم أعمق.</span><div><a href={loginUrl}>دخول الطالب</a><a href={adminUrl}>دخول المدرس</a></div></footer>
+      <footer className="landing-footer page-width"><a className="landing-brand" href="#home"><span className="landing-mark" aria-hidden="true"><i /><i /><i /></span><span><strong>mr electron</strong><small>منصة العلوم</small></span></a><span>منهج مرتب. فهم أعمق.</span><div><a href={loginUrl}>دخول الطالب</a><a href={adminUrl}>دخول المدرس</a><a className="landing-credit" href="https://wa.me/201062772291" target="_blank" rel="noopener noreferrer" aria-label="التواصل مع Essam Abo Elmgd على واتساب">Developed by Essam Abo Elmgd</a></div></footer>
     </div>
   );
 }
