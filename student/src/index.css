@@ -520,3 +520,12 @@ body { overflow-x: hidden; }
 @media (prefers-reduced-motion: reduce) {
   .mobile-action-menu, .mobile-action-item, .mobile-action-label { transition: none; }
 }
+
+/* Settings uses the available work area and keeps the two account tasks balanced. */
+.settings-page { width: 100%; max-width: 1180px; margin-inline: auto; }
+@media (min-width: 900px) {
+  .settings-page { grid-template-columns: repeat(2, minmax(0, 1fr)); align-items: start; gap: 18px; }
+  .settings-page > .page-intro,
+  .settings-page > .inline-error,
+  .settings-page > .inline-success { grid-column: 1 / -1; }
+}

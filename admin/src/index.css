@@ -428,3 +428,12 @@ body { overflow-x: hidden; }
 @media (prefers-reduced-motion: reduce) {
   .admin-mobile-action-menu, .admin-mobile-action-item, .admin-mobile-action-label { transition: none; }
 }
+
+/* Settings uses the available work area and keeps the two account tasks balanced. */
+.admin-settings-page { width: 100%; max-width: 1180px; margin-inline: auto; }
+@media (min-width: 900px) {
+  .admin-settings-page { grid-template-columns: repeat(2, minmax(0, 1fr)); align-items: start; gap: 18px; }
+  .admin-settings-page > .admin-page-intro,
+  .admin-settings-page > .admin-error,
+  .admin-settings-page > .admin-success { grid-column: 1 / -1; }
+}
