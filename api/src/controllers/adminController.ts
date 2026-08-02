@@ -16,7 +16,7 @@ import Submission from '../models/Submission';
 import VideoProgress from '../models/VideoProgress';
 import { Types } from 'mongoose';
 import { paginate, PaginationResult } from '../utils/pagination';
-import { extractPublicId, deleteImage } from '../services/cloudinaryService';
+import { extractPublicId, deleteImage, uploadImage } from '../services/cloudinaryService';
 import { normalizeVideoSource } from './courseController';
 import { createBunnyUploadSession, isBunnyConfigured } from '../services/bunnyService';
 
@@ -403,7 +403,7 @@ export const createQuestion = async (req: any, res: Response): Promise<void> => 
   try {
     // If an image was uploaded, use the Cloudinary URL
     if (req.file) {
-      req.body.content = (req.file as any).path; // Cloudinary URL
+      req.body.content = await uploadImage(req.file.buffer, 'electron/questions');
     }
     
     // Use onModel from request body, default to Exam for backward compatibility
@@ -444,7 +444,7 @@ export const updateQuestion = async (req: any, res: Response): Promise<void> => 
   try {
     // If an image was uploaded, use the Cloudinary URL
     if (req.file) {
-      req.body.content = (req.file as any).path; // Cloudinary URL
+      req.body.content = await uploadImage(req.file.buffer, 'electron/questions');
     }
     
     // First, get the existing question to check its onModel
@@ -676,7 +676,7 @@ export const createNote = async (req: any, res: Response): Promise<void> => {
   try {
     // If an image was uploaded, use the Cloudinary URL
     if (req.file) {
-      req.body.image = (req.file as any).path; // Cloudinary URL
+      req.body.image = await uploadImage(req.file.buffer, 'electron/notes');
     }
     
     const note = await Note.create(req.body);
@@ -708,7 +708,7 @@ export const updateNote = async (req: any, res: Response): Promise<void> => {
   try {
     // If an image was uploaded, use the Cloudinary URL
     if (req.file) {
-      req.body.image = (req.file as any).path; // Cloudinary URL
+      req.body.image = await uploadImage(req.file.buffer, 'electron/notes');
     }
     
     const note = await Note.findByIdAndUpdate(req.params.id, req.body, {

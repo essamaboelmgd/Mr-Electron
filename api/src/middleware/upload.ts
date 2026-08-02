@@ -1,47 +1,10 @@
 import multer from 'multer';
-import { v2 as cloudinary } from 'cloudinary';
-import { CloudinaryStorage } from 'multer-storage-cloudinary';
-import dotenv from 'dotenv';
 
-// Load environment variables
-dotenv.config();
-
-// Configure Cloudinary
-cloudinary.config({
-  cloud_name: process.env.CLOUDINARY_CLOUD_NAME,
-  api_key: process.env.CLOUDINARY_API_KEY,
-  api_secret: process.env.CLOUDINARY_API_SECRET,
-});
-
-// Create storage configuration for courses
-const courseStorage = new CloudinaryStorage({
-  cloudinary: cloudinary,
-  params: async (req, file) => {
-    return {
-      folder: 'electron/courses'
-    };
-  }
-});
-
-// Create storage configuration for notes
-const noteStorage = new CloudinaryStorage({
-  cloudinary: cloudinary,
-  params: async (req, file) => {
-    return {
-      folder: 'electron/notes'
-    };
-  }
-});
-
-// Create storage configuration for questions
-const questionStorage = new CloudinaryStorage({
-  cloudinary: cloudinary,
-  params: async (req, file) => {
-    return {
-      folder: 'electron/questions'
-    };
-  }
-});
+// Keep uploads in memory and send them through our Cloudinary service after
+// Multer has validated the file. This avoids the unmaintained
+// multer-storage-cloudinary adapter and keeps the upload path compatible with
+// Cloudinary SDK v2.
+const storage = multer.memoryStorage();
 
 // File filter to allow only images
 const fileFilter = (req: any, file: any, cb: any) => {
@@ -54,7 +17,7 @@ const fileFilter = (req: any, file: any, cb: any) => {
 
 // Create multer instances for different folders
 const uploadCourseImage = multer({
-  storage: courseStorage,
+  storage,
   fileFilter,
   limits: {
     fileSize: 5 * 1024 * 1024 // 5MB limit
@@ -62,7 +25,7 @@ const uploadCourseImage = multer({
 });
 
 const uploadNoteImage = multer({
-  storage: noteStorage,
+  storage,
   fileFilter,
   limits: {
     fileSize: 5 * 1024 * 1024 // 5MB limit
@@ -70,7 +33,7 @@ const uploadNoteImage = multer({
 });
 
 const uploadQuestionImage = multer({
-  storage: questionStorage,
+  storage,
   fileFilter,
   limits: {
     fileSize: 5 * 1024 * 1024 // 5MB limit
