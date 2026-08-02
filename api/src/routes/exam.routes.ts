@@ -12,6 +12,7 @@ import {
   submitExamAttempt,
   getExamAttempts
 } from '../controllers/examController';
+import { downloadStudentExamReport } from '../controllers/reportController';
 
 const router = Router();
 
@@ -22,6 +23,7 @@ router.get('/:id', getExamById);
 router.get('/:id/questions', getExamQuestions);
 router.post('/:id/attempts', startExamAttempt);
 router.get('/:id/attempts', getExamAttempts);
+router.get('/:id/results.pdf', downloadStudentExamReport);
 router.patch('/:id/attempts/:attemptId', saveExamAttempt);
 router.post('/:id/attempts/:attemptId/submit', submitExamAttempt);
 router.post('/:id/submissions', submitExamAnswers);

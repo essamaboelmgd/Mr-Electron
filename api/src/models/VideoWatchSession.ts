@@ -9,6 +9,8 @@ export interface IVideoWatchSession extends Document {
   durationSeconds: number;
   startedAt: Date;
   lastWatchedAt: Date;
+  lastSequence: number;
+  lastEventAt: Date;
   completedAt?: Date | null;
 }
 
@@ -21,6 +23,8 @@ const VideoWatchSessionSchema = new Schema<IVideoWatchSession>({
   durationSeconds: { type: Number, min: 0, default: 0 },
   startedAt: { type: Date, default: Date.now },
   lastWatchedAt: { type: Date, default: Date.now },
+  lastSequence: { type: Number, min: 0, default: 0 },
+  lastEventAt: { type: Date, default: Date.now },
   completedAt: { type: Date, required: false, default: null }
 }, { timestamps: true });
 

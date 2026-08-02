@@ -1,4 +1,4 @@
-import { useLocation, useNavigate, useParams } from 'react-router-dom';
+import { useLocation, useNavigate, useParams } from '@/lib/router';
 import { AppShell } from '@/components/AppShell';
 import { Button } from '@/components/ui/button';
 import { CheckCircle, XCircle, Award, RotateCcw } from 'lucide-react';

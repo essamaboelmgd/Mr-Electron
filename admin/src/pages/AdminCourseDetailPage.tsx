@@ -1,8 +1,8 @@
 import { ChangeEvent, FormEvent, useEffect, useState } from 'react';
-import { ArrowRight, Check, ChevronLeft, Clock3, Edit3, ExternalLink, FileText, Link2, Plus, RefreshCw, Trash2, Video, X } from 'lucide-react';
-import { useNavigate, useParams } from 'react-router-dom';
+import { ArrowRight, Check, ChevronLeft, ChevronRight, Clock3, Edit3, ExternalLink, FileText, Link2, Plus, RefreshCw, Trash2, Video, X } from 'lucide-react';
+import { useNavigate, useParams } from '@/lib/router';
 import { AppShell } from '@/components/AppShell';
-import { completeBunnyUpload, Course, CourseExam, createBunnyUploadSession, createLesson, deleteLesson, getCourseById, getCourseExams, getCourseLessons, Lesson, uploadFileToBunny, updateLesson } from '@/services/coursesService';
+import { completeBunnyUpload, Course, CourseExam, createBunnyUploadSession, createLesson, deleteLesson, getCourseById, getCourseExams, getCourseLessons, Lesson, Pagination, uploadFileToBunny, updateLesson } from '@/services/coursesService';
 
 type Provider = 'bunny' | 'youtube' | 'vimeo';
 type LessonForm = { title: string; duration: string; description: string; order: string; provider: Provider; videoUrl: string; videoFile: File | null };
@@ -19,6 +19,8 @@ export default function AdminCourseDetailPage() {
   const navigate = useNavigate();
   const [course, setCourse] = useState<Course | null>(null);
   const [lessons, setLessons] = useState<Lesson[]>([]);
+  const [lessonPagination, setLessonPagination] = useState<Pagination | null>(null);
+  const [lessonPage, setLessonPage] = useState(1);
   const [exams, setExams] = useState<CourseExam[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
@@ -31,15 +33,15 @@ export default function AdminCourseDetailPage() {
   const load = () => {
     if (!id) return;
     setLoading(true);
-    Promise.all([getCourseById(id), getCourseLessons(id), getCourseExams(id)])
-      .then(([chapter, chapterLessons, chapterExams]) => { setCourse(chapter); setLessons(chapterLessons); setExams(chapterExams); })
+    Promise.all([getCourseById(id), getCourseLessons(id, { page: lessonPage, limit: 10 }), getCourseExams(id)])
+      .then(([chapter, chapterLessons, chapterExams]) => { setCourse(chapter); setLessons(chapterLessons.lessons); setLessonPagination(chapterLessons.pagination); setExams(chapterExams); })
       .catch((requestError: unknown) => setError(requestMessage(requestError, 'تعذر تحميل الباب.')))
       .finally(() => setLoading(false));
   };
 
-  useEffect(load, [id]);
+  useEffect(load, [id, lessonPage]);
 
-  const openCreate = () => { setEditing(null); setForm({ ...blankLesson, order: String(lessons.length + 1) }); setDialog(true); setError(''); setUploadProgress(0); };
+  const openCreate = () => { setEditing(null); setForm({ ...blankLesson, order: String((lessonPage - 1) * 10 + lessons.length + 1) }); setDialog(true); setError(''); setUploadProgress(0); };
   const openEdit = (lesson: Lesson) => {
     setEditing(lesson);
     setForm({
@@ -99,7 +101,8 @@ export default function AdminCourseDetailPage() {
       {error && <div className="admin-error" role="alert">{error}<button type="button" onClick={() => { setError(''); load(); }}><RefreshCw size={14} /> إعادة المحاولة</button></div>}
       <div className="admin-detail-grid">
         <section className="admin-panel"><div className="admin-section-heading"><div><span className="admin-eyebrow">محتوى الباب</span><h2>الدروس</h2></div><button type="button" className="admin-primary" onClick={openCreate}><Plus size={16} /> إضافة درس</button></div>
-          <div className="admin-lesson-list">{lessons.length === 0 ? <div className="admin-empty-mini">لم تضف دروسًا لهذا الباب بعد.</div> : lessons.map((lesson, index) => <article className="admin-lesson-row" key={lesson._id}><span className="admin-lesson-number">{String(index + 1).padStart(2, '0')}</span><span className="admin-lesson-copy"><strong>{lesson.title}</strong><small><Clock3 size={12} /> {lesson.duration || 0} دقيقة · <Video size={12} /> {lesson.videoProvider === 'vimeo' ? 'Vimeo' : lesson.videoProvider === 'bunny' ? 'Bunny' : 'YouTube'} {lesson.videoStatus === 'processing' ? '· قيد المعالجة' : ''}</small></span><span className="admin-lesson-actions"><button type="button" aria-label="تعديل الدرس" onClick={() => openEdit(lesson)}><Edit3 size={15} /></button><button type="button" aria-label="حذف الدرس" onClick={() => removeLesson(lesson)}><Trash2 size={15} /></button></span></article>)}</div>
+          <div className="admin-lesson-list">{lessons.length === 0 ? <div className="admin-empty-mini">لم تضف دروسًا لهذا الباب بعد.</div> : lessons.map((lesson, index) => <article className="admin-lesson-row" key={lesson._id}><span className="admin-lesson-number">{String((lessonPage - 1) * 10 + index + 1).padStart(2, '0')}</span><span className="admin-lesson-copy"><strong>{lesson.title}</strong><small><Clock3 size={12} /> {lesson.duration || 0} دقيقة · <Video size={12} /> {lesson.videoProvider === 'vimeo' ? 'Vimeo' : lesson.videoProvider === 'bunny' ? 'Bunny' : 'YouTube'} {lesson.videoStatus === 'processing' ? '· قيد المعالجة' : ''}</small></span><span className="admin-lesson-actions"><button type="button" aria-label="تعديل الدرس" onClick={() => openEdit(lesson)}><Edit3 size={15} /></button><button type="button" aria-label="حذف الدرس" onClick={() => removeLesson(lesson)}><Trash2 size={15} /></button></span></article>)}</div>
+          {lessonPagination && lessonPagination.totalPages > 1 && <div className="pagination-controls"><button type="button" onClick={() => setLessonPage((value) => value - 1)} disabled={!lessonPagination.hasPrevPage}><ChevronRight size={15} /> السابق</button><span>صفحة {lessonPagination.currentPage} من {lessonPagination.totalPages}</span><button type="button" onClick={() => setLessonPage((value) => value + 1)} disabled={!lessonPagination.hasNextPage}>التالي <ChevronLeft size={15} /></button></div>}
         </section>
         <aside className="admin-panel admin-exam-panel"><div className="admin-section-heading"><div><span className="admin-eyebrow">اختبارات الفهم</span><h2>امتحانات الباب</h2></div><button type="button" className="admin-icon-button" onClick={() => navigate(`/exams/manage?courseId=${id}`)} aria-label="إضافة امتحان"><Plus size={16} /></button></div>{exams.length === 0 ? <div className="admin-empty-mini"><FileText size={20} /><p>لا يوجد امتحان لهذا الباب.</p><button type="button" className="admin-text-link" onClick={() => navigate(`/exams/manage?courseId=${id}`)}>إضافة امتحان <ChevronLeft size={14} /></button></div> : <div className="admin-exam-list">{exams.map((exam) => <button type="button" className="admin-exam-row" key={exam._id} onClick={() => navigate(`/admin/exams/${exam._id}`)}><span><FileText size={16} /></span><span><strong>{exam.title}</strong><small>{exam.timeLimitMin ? `${exam.timeLimitMin} دقيقة` : 'بدون وقت محدد'} · {exam.totalMarks || 0} درجات</small></span><ChevronLeft size={15} /></button>)}</div>}</aside>
       </div>

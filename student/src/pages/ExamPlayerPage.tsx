@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { ArrowRight, CheckCircle2, ChevronLeft, ChevronRight, Clock3, FileText, Send, ShieldAlert } from 'lucide-react';
-import { useNavigate, useParams } from 'react-router-dom';
+import { useNavigate, useParams } from '@/lib/router';
 import { AppShell } from '@/components/AppShell';
 import {
   Answer,
@@ -21,6 +21,11 @@ const answersToMap = (answers: Answer[] = []) => answers.reduce<Record<string, s
   map[String(answer.questionId)] = answer.selectedOption;
   return map;
 }, {});
+
+const requestMessage = (error: unknown, fallback: string) => {
+  const typed = error as { response?: { data?: { message?: string } } };
+  return typed.response?.data?.message || fallback;
+};
 
 export default function ExamPlayerPage() {
   const { id } = useParams<{ id: string }>();
@@ -45,10 +50,10 @@ export default function ExamPlayerPage() {
     setSubmitting(true);
     setError('');
     try {
-      await submitExamAttempt(id, attempt._id, answersPayload);
-      navigate(`/exams/${id}/result?attemptId=${attempt._id}`, { replace: true });
-    } catch (requestError: any) {
-      setError(requestError.response?.data?.message || (isTimeout ? 'تعذر تسليم الامتحان بعد انتهاء الوقت.' : 'تعذر تسليم الامتحان. حاول مرة أخرى.'));
+      const submitted = await submitExamAttempt(id, attempt._id, answersPayload);
+      navigate(`/exams/${id}/result?attemptId=${submitted.submission._id}`, { replace: true });
+    } catch (requestError: unknown) {
+      setError(requestMessage(requestError, isTimeout ? 'تعذر تسليم الامتحان بعد انتهاء الوقت.' : 'تعذر تسليم الامتحان. حاول مرة أخرى.'));
       setSubmitting(false);
     }
   };
@@ -61,17 +66,17 @@ export default function ExamPlayerPage() {
         const examData = await getExamById(id);
         if (cancelled) return;
         setExam(examData);
-        const questionData = await getExamQuestions(id);
-        if (cancelled) return;
-        setQuestions(questionData);
         const started = await startExamAttempt(id);
         if (cancelled) return;
         setAttempt(started.attempt);
         setPolicy(started.policy);
         setAnswers(answersToMap(started.attempt.answers));
+        const questionData = await getExamQuestions(id, false, started.attempt._id);
+        if (cancelled) return;
+        setQuestions(questionData);
         setCurrent(Math.min(started.attempt.currentQuestion || 0, Math.max(questionData.length - 1, 0)));
         setTimeLeft(started.attempt.remainingSeconds || 0);
-      } catch (requestError: any) {
+      } catch (requestError: unknown) {
         try {
           const result = await getExamResults(id);
           if (!cancelled) {
@@ -79,7 +84,7 @@ export default function ExamPlayerPage() {
             setPolicy(result.policy || null);
           }
         } catch {
-          if (!cancelled) setError(requestError.response?.data?.message || 'الامتحان غير متاح حاليًا.');
+          if (!cancelled) setError(requestMessage(requestError, 'الامتحان غير متاح حاليًا.'));
         }
       } finally {
         if (!cancelled) setLoading(false);
@@ -124,7 +129,7 @@ export default function ExamPlayerPage() {
 
   if (loading) return <AppShell><div className="loading-panel"><span className="spinner" /> جارٍ تجهيز الامتحان...</div></AppShell>;
   if (error || !exam) return <AppShell><div className="error-state"><ShieldAlert size={28} /><h1>لا يمكن فتح الامتحان</h1><p>{error || 'الامتحان غير موجود.'}</p><button type="button" className="outline-button" onClick={() => navigate('/exams')}>العودة للامتحانات</button></div></AppShell>;
-  if (existingResult && !attempt) return <AppShell><div className="result-locked"><span className="result-seal"><CheckCircle2 size={32} /></span><span className="eyebrow">لا توجد محاولة جديدة</span><h1>وصلت للحد المسموح من المحاولات</h1><p>آخر نتيجة لك {Math.round(existingResult.percentage)}٪. يمكنك العودة للنتيجة أو مراجعة الإجابات إذا فتحها المدرس.</p><div className="result-actions"><button type="button" className="primary-button" onClick={() => navigate(`/exams/${id}/result?attemptId=${existingResult.submission._id}`)}>عرض النتيجة</button><button type="button" className="quiet-button" onClick={() => navigate('/exams')}>العودة</button></div></div></AppShell>;
+  if (existingResult && !attempt) return <AppShell><div className="result-locked"><span className="result-seal"><CheckCircle2 size={32} /></span><span className="eyebrow">لا توجد محاولة جديدة</span><h1>{existingResult.reviewed ? 'لا يمكن إعادة الامتحان بعد المراجعة' : 'وصلت للحد المسموح من المحاولات'}</h1><p>{existingResult.reviewed ? 'تم فتح مراجعة إجابات إحدى المحاولات، لذلك أُغلقت أي محاولة جديدة لهذا الامتحان.' : `آخر نتيجة لك ${Math.round(existingResult.percentage)}٪. يمكنك العودة للنتيجة أو مراجعة الإجابات إذا فتحها المدرس.`}</p><div className="result-actions"><button type="button" className="primary-button" onClick={() => navigate(`/exams/${id}/result?attemptId=${existingResult.submission._id}`)}>عرض النتيجة</button><button type="button" className="quiet-button" onClick={() => navigate('/exams')}>العودة</button></div></div></AppShell>;
   if (!currentQuestion || !attempt) return <AppShell><div className="empty-state"><FileText size={26} /><h2>الامتحان لم يجهز بأسئلة بعد</h2><p>سيظهر هنا فور إضافة أسئلة من المدرس.</p><button type="button" className="outline-button" onClick={() => navigate('/exams')}>العودة</button></div></AppShell>;
 
   return (

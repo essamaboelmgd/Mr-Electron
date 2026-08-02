@@ -2,13 +2,14 @@ import { useEffect, useRef } from 'react';
 import { recordVideoEvent } from '@/services/coursesService';
 
 type Provider = 'youtube' | 'vimeo' | 'bunny';
-export interface VideoSource { url: string; provider: Provider; videoId?: string; }
+export interface VideoSource { url: string; provider: Provider; videoId?: string; initialPositionSeconds?: number; }
 
-interface Props { lessonId: string; title: string; source: VideoSource; }
+interface Props { lessonId: string; title: string; source: VideoSource; initialPositionSeconds?: number; }
 
 interface YouTubePlayer {
   getCurrentTime: () => number;
   getDuration: () => number;
+  seekTo?: (seconds: number, allowSeekAhead?: boolean) => void;
   destroy: () => void;
 }
 
@@ -17,6 +18,7 @@ interface PlayerPayload { seconds?: number; duration?: number; }
 interface PlayerJsInstance {
   on: (event: string, callback: (payload?: PlayerPayload) => void) => void;
   off?: (event: string, callback: (payload?: PlayerPayload) => void) => void;
+  setCurrentTime?: (seconds: number) => void;
 }
 
 declare global {
@@ -44,7 +46,13 @@ const loadExternalScript = (src: string, ready: () => boolean, callbackName?: 'o
   document.head.appendChild(element);
 });
 
-const loadYouTubeApi = () => youtubeApiPromise ||= loadExternalScript('https://www.youtube.com/iframe_api', () => Boolean(window.YT?.Player), 'onYouTubeIframeAPIReady');
+const loadYouTubeApi = () => {
+  if (!youtubeApiPromise) youtubeApiPromise = loadExternalScript('https://www.youtube.com/iframe_api', () => Boolean(window.YT?.Player), 'onYouTubeIframeAPIReady');
+  return youtubeApiPromise.catch((error) => {
+    youtubeApiPromise = null;
+    throw error;
+  });
+};
 const loadPlayerJs = () => playerJsPromise ||= loadExternalScript('https://cdn.jsdelivr.net/npm/player.js@0.1.0/dist/player-0.1.0.min.js', () => Boolean(window.playerjs?.Player));
 
 const makeSessionId = () => {
@@ -64,10 +72,10 @@ const youtubeUrl = (source: VideoSource) => {
   return url.toString();
 };
 
-export default function VideoPlayer({ lessonId, title, source }: Props) {
-  const youtubeHost = useRef<HTMLDivElement | null>(null);
+export default function VideoPlayer({ lessonId, title, source, initialPositionSeconds = 0 }: Props) {
   const iframeRef = useRef<HTMLIFrameElement | null>(null);
   const sessionRef = useRef(makeSessionId());
+  const sequenceRef = useRef(0);
   const lastSampleRef = useRef({ position: 0, at: Date.now(), duration: 0, playing: false });
 
   useEffect(() => {
@@ -78,7 +86,8 @@ export default function VideoPlayer({ lessonId, title, source }: Props) {
     const sessionId = sessionRef.current;
 
     const send = (event: 'play' | 'pause' | 'timeupdate' | 'ended' | 'seeked', position: number, duration: number, delta: number) => {
-      void recordVideoEvent(lessonId, { sessionId, event, positionSeconds: Math.max(0, position || 0), durationSeconds: Math.max(0, duration || 0), watchedDeltaSeconds: Math.min(30, Math.max(0, delta || 0)) }).catch(() => undefined);
+      sequenceRef.current += 1;
+      void recordVideoEvent(lessonId, { sessionId, event, positionSeconds: Math.max(0, position || 0), durationSeconds: Math.max(0, duration || 0), watchedDeltaSeconds: Math.min(30, Math.max(0, delta || 0)), sequence: sequenceRef.current }).catch(() => undefined);
     };
     const markOpened = () => send('timeupdate', 0, 0, 0);
     const flush = (event: 'pause' | 'timeupdate' | 'ended', position: number, duration: number, playing: boolean) => {
@@ -91,19 +100,22 @@ export default function VideoPlayer({ lessonId, title, source }: Props) {
     };
 
     const mountYouTube = () => {
-      if (disposed || !youtubeHost.current || !window.YT?.Player || !source.videoId) return;
-      youtubePlayer = new window.YT.Player(youtubeHost.current, {
+      if (disposed || !iframeRef.current || !window.YT?.Player || !source.videoId) return;
+      youtubePlayer = new window.YT.Player(iframeRef.current, {
         videoId: source.videoId,
         playerVars: { autoplay: 0, controls: 1, enablejsapi: 1, fs: 0, modestbranding: 1, playsinline: 1, rel: 0, origin: window.location.origin },
         events: {
-          onReady: () => markOpened(),
+          onReady: () => {
+            markOpened();
+            if (initialPositionSeconds > 0) youtubePlayer?.seekTo?.(initialPositionSeconds, true);
+          },
           onStateChange: (event: { data: number }) => {
             if (!youtubePlayer) return;
             const current = youtubePlayer.getCurrentTime();
             const duration = youtubePlayer.getDuration();
             if (event.data === 1) { lastSampleRef.current = { position: current, duration, at: Date.now(), playing: true }; send('play', current, duration, 0); }
             if (event.data === 2) flush('pause', current, duration, false);
-            if (event.data === 0) flush('ended', current, duration, true);
+            if (event.data === 0) flush('ended', current, duration, false);
           }
         }
       });
@@ -114,12 +126,15 @@ export default function VideoPlayer({ lessonId, title, source }: Props) {
       if (disposed || !iframeRef.current || !window.playerjs?.Player) return;
       playerJs = new window.playerjs.Player(iframeRef.current);
       markOpened();
-      playerJs.on('ready', markOpened);
+      playerJs.on('ready', () => {
+        markOpened();
+        if (initialPositionSeconds > 0) playerJs?.setCurrentTime?.(initialPositionSeconds);
+      });
       playerJs.on('play', (payload) => { const position = Number(payload?.seconds || 0); const duration = Number(payload?.duration || 0); lastSampleRef.current = { position, duration, at: Date.now(), playing: true }; send('play', position, duration, 0); });
       playerJs.on('pause', (payload) => { flush('pause', Number(payload?.seconds || lastSampleRef.current.position), Number(payload?.duration || lastSampleRef.current.duration), false); });
       playerJs.on('timeupdate', (payload) => { const position = Number(payload?.seconds || 0); const duration = Number(payload?.duration || lastSampleRef.current.duration); flush('timeupdate', position, duration, true); });
       playerJs.on('seeked', (payload) => { const position = Number(payload?.seconds || lastSampleRef.current.position); const duration = Number(payload?.duration || lastSampleRef.current.duration); send('seeked', position, duration, 0); lastSampleRef.current = { position, duration, at: Date.now(), playing: lastSampleRef.current.playing }; });
-      playerJs.on('ended', (payload) => flush('ended', Number(payload?.seconds || lastSampleRef.current.position), Number(payload?.duration || lastSampleRef.current.duration), true));
+      playerJs.on('ended', (payload) => flush('ended', Number(payload?.seconds || lastSampleRef.current.position), Number(payload?.duration || lastSampleRef.current.duration), false));
     };
 
     if (source.provider === 'youtube' && source.videoId) {
@@ -127,11 +142,20 @@ export default function VideoPlayer({ lessonId, title, source }: Props) {
     } else {
       loadPlayerJs().then(mountPlayerJs).catch(markOpened);
     }
-    return () => { disposed = true; if (timer) window.clearInterval(timer); youtubePlayer?.destroy(); playerJs = null; };
-  }, [lessonId, source.provider, source.url, source.videoId]);
+    const handlePageHide = () => flush('pause', youtubePlayer?.getCurrentTime?.() || lastSampleRef.current.position, youtubePlayer?.getDuration?.() || lastSampleRef.current.duration, false);
+    window.addEventListener('pagehide', handlePageHide);
+    return () => {
+      handlePageHide();
+      window.removeEventListener('pagehide', handlePageHide);
+      disposed = true;
+      if (timer) window.clearInterval(timer);
+      youtubePlayer?.destroy();
+      playerJs = null;
+    };
+  }, [initialPositionSeconds, lessonId, source.provider, source.url, source.videoId]);
 
   return <div className="video-player-shell">
-    {source.provider === 'youtube' && source.videoId ? <div className="video-player-host" ref={youtubeHost} /> : <iframe ref={iframeRef} src={source.provider === 'youtube' ? youtubeUrl(source) : source.url} title={title} allow="autoplay; fullscreen; picture-in-picture" allowFullScreen referrerPolicy="strict-origin-when-cross-origin" />}
+    <iframe ref={iframeRef} src={source.provider === 'youtube' ? youtubeUrl(source) : source.url} title={title} allow="autoplay; fullscreen; picture-in-picture" allowFullScreen referrerPolicy="strict-origin-when-cross-origin" />
     <span className="video-watermark" aria-hidden="true">mr electron · مشاهدة تعليمية</span>
   </div>;
 }

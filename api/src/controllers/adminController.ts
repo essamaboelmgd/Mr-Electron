@@ -165,7 +165,11 @@ export const createExam = async (req: Request, res: Response): Promise<void> => 
       isActive = true,
       maxAttempts = 1,
       reviewMode = 'closed',
-      reviewReleaseAt = null
+      reviewReleaseAt = null,
+      date = null,
+      mandatoryAttendance = false,
+      shuffleQuestions = false,
+      shuffleOptions = false
     } = req.body;
     if (!['general', 'course'].includes(type)) {
       throw new AppError('نوع الامتحان يجب أن يكون عامًا أو خاصًا بباب', 400);
@@ -191,7 +195,11 @@ export const createExam = async (req: Request, res: Response): Promise<void> => 
       isActive,
       maxAttempts: Math.floor(Number(maxAttempts) || 1),
       reviewMode,
-      reviewReleaseAt: reviewMode === 'scheduled' ? reviewReleaseAt : null
+      reviewReleaseAt: reviewMode === 'scheduled' ? reviewReleaseAt : null,
+      date,
+      mandatoryAttendance: Boolean(mandatoryAttendance),
+      shuffleQuestions: Boolean(shuffleQuestions),
+      shuffleOptions: Boolean(shuffleOptions)
     });
     
     res.status(201).json({
@@ -219,10 +227,27 @@ export const createExam = async (req: Request, res: Response): Promise<void> => 
 // Update an exam
 export const updateExam = async (req: Request, res: Response): Promise<void> => {
   try {
-    const allowedFields = ['title', 'type', 'courseId', 'educationalLevel', 'timeLimitMin', 'isActive', 'maxAttempts', 'reviewMode', 'reviewReleaseAt'];
+    const allowedFields = [
+      'title', 'type', 'courseId', 'educationalLevel', 'timeLimitMin', 'isActive',
+      'maxAttempts', 'reviewMode', 'reviewReleaseAt', 'date', 'mandatoryAttendance',
+      'shuffleQuestions', 'shuffleOptions'
+    ];
     const payload: any = Object.fromEntries(allowedFields
       .filter((field) => req.body[field] !== undefined)
       .map((field) => [field, req.body[field]]));
+    const existing = await Exam.findById(req.params.id);
+    if (!existing) throw new AppError('Exam not found', 404);
+    const nextType = payload.type || existing.type;
+    const nextCourseId = payload.courseId !== undefined ? payload.courseId : existing.courseId;
+    const nextEducationalLevel = payload.educationalLevel !== undefined ? payload.educationalLevel : existing.educationalLevel;
+    if (nextType === 'general' && !nextEducationalLevel) {
+      throw new AppError('الامتحان العام يحتاج إلى صف دراسي', 400);
+    }
+    if (nextType === 'course' && !nextCourseId) {
+      throw new AppError('امتحان الباب يحتاج إلى باب', 400);
+    }
+    payload.courseId = nextType === 'course' ? nextCourseId : null;
+    payload.educationalLevel = nextType === 'general' ? nextEducationalLevel : null;
     if (payload.maxAttempts !== undefined && Number(payload.maxAttempts) < 1) {
       throw new AppError('عدد المحاولات يجب أن يكون واحدًا على الأقل', 400);
     }
@@ -591,11 +616,15 @@ export const getAllUsers = async (req: Request, res: Response): Promise<void> =>
 // Get all exams (for admin panel) with pagination
 export const getAllExams = async (req: Request, res: Response): Promise<void> => {
   try {
-    const { page = 1, limit = 10 } = req.query;
+    const { page = 1, limit = 10, search, isActive } = req.query;
     const query: any = {};
     if (req.query.type) query.type = req.query.type;
     if (req.query.courseId) query.courseId = req.query.courseId;
     if (req.query.educationalLevel) query.educationalLevel = req.query.educationalLevel;
+    if (isActive !== undefined) query.isActive = isActive === 'true';
+    if (search) {
+      query.title = new RegExp(String(search).trim().replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'i');
+    }
     
     const result: PaginationResult<any> = await paginate(
       Exam,
@@ -906,7 +935,7 @@ export const getDashboardStats = async (req: Request, res: Response): Promise<vo
 export const getExamSubmissions = async (req: Request, res: Response): Promise<void> => {
   try {
     const { examId } = req.params;
-    const { page, limit } = req.query;
+    const { page = 1, limit = 20, search } = req.query;
     
     // Validate exam exists
     const exam = await Exam.findById(examId);
@@ -914,30 +943,65 @@ export const getExamSubmissions = async (req: Request, res: Response): Promise<v
       throw new AppError('Exam not found', 404);
     }
     
-    // Build query
-    const query: any = { 
-      examId: examId,
-      onModel: 'Exam'
-    };
-    
-    // Paginate results
-    const result: PaginationResult<any> = await paginate(
-      Submission,
-      query,
-      { page: Number(page), limit: Number(limit) },
-      { submittedAt: -1 }
-    );
-    
-    // Populate user details
-    const populatedData = await Submission.populate(result.data, {
-      path: 'userId',
-      select: 'name email phone'
+    const query: any = { examId: new Types.ObjectId(examId), onModel: 'Exam' };
+    if (search) {
+      const pattern = new RegExp(String(search).trim().replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'i');
+      const matchingUsers = await User.find({ role: 'student', $or: [{ name: pattern }, { phone: pattern }] }).select('_id').lean();
+      query.userId = { $in: matchingUsers.map((user: any) => user._id) };
+    }
+    const currentPage = Math.max(1, Number(page) || 1);
+    const itemsPerPage = Math.min(100, Math.max(1, Number(limit) || 20));
+    const grouped = await Submission.aggregate([
+      { $match: query },
+      { $sort: { submittedAt: -1 } },
+      { $project: {
+        _id: 1, userId: 1, score: 1, totalMarks: 1, submittedAt: 1,
+        attemptNumber: 1, submittedReason: 1, reviewedAt: 1
+      } },
+      { $group: {
+        _id: '$userId',
+        latestSubmittedAt: { $first: '$submittedAt' },
+        attempts: { $push: '$$ROOT' }
+      } },
+      { $sort: { latestSubmittedAt: -1 } },
+      { $facet: {
+        metadata: [{ $count: 'totalItems' }],
+        data: [{ $skip: (currentPage - 1) * itemsPerPage }, { $limit: itemsPerPage }]
+      } }
+    ]);
+    const aggregation = grouped[0] || { metadata: [], data: [] };
+    const totalItems = aggregation.metadata[0]?.totalItems || 0;
+    const totalPages = Math.ceil(totalItems / itemsPerPage);
+    const userIds = aggregation.data.map((group: any) => group._id);
+    const users = await User.find({ _id: { $in: userIds } }).select('name email phone educationalLevel').populate('educationalLevel', 'nameAr name').lean();
+    const usersById = new Map(users.map((user: any) => [String(user._id), user]));
+    const data = aggregation.data.map((group: any) => {
+      const attempts = group.attempts || [];
+      const latestAttempt = attempts[0];
+      const bestAttempt = attempts.reduce((best: any, attempt: any) => {
+        const score = attempt.totalMarks ? attempt.score / attempt.totalMarks : 0;
+        const bestScore = best?.totalMarks ? best.score / best.totalMarks : -1;
+        return score > bestScore ? attempt : best;
+      }, null);
+      return {
+        student: usersById.get(String(group._id)) || { _id: group._id, name: 'طالب', phone: '' },
+        attempts,
+        latestAttempt,
+        bestAttempt
+      };
     });
     
     res.status(200).json({
       status: 'success',
-      data: populatedData,
-      pagination: result.pagination
+      data,
+      pagination: {
+        currentPage,
+        totalPages,
+        totalItems,
+        itemsPerPage,
+        hasNextPage: currentPage < totalPages,
+        hasPrevPage: currentPage > 1
+      }
     });
   } catch (error: any) {
     if (error.name === 'CastError') {
@@ -1339,6 +1403,7 @@ export const getStudentExamAttempts = async (req: Request, res: Response): Promi
     if (!student) throw new AppError('الطالب غير موجود', 404);
     const query: any = { userId: req.params.userId, onModel: 'Exam' };
     if (req.query.examId) query.examId = req.query.examId;
+    if (req.query.submittedReason) query.submittedReason = req.query.submittedReason;
     const result: PaginationResult<any> = await paginate(
       Submission,
       query,
@@ -1370,9 +1435,17 @@ export const getStudentVideoActivity = async (req: Request, res: Response): Prom
   try {
     const student = await User.exists({ _id: req.params.userId, role: 'student' });
     if (!student) throw new AppError('الطالب غير موجود', 404);
+    const query: any = { userId: req.params.userId };
+    if (req.query.lessonId) query.lessonId = req.query.lessonId;
+    if (req.query.courseId) {
+      const lessonIds = await Lesson.find({ courseId: req.query.courseId }).distinct('_id');
+      query.lessonId = { $in: lessonIds };
+    }
+    if (req.query.completion === 'completed') query.completionPercent = { $gte: 95 };
+    if (req.query.completion === 'incomplete') query.completionPercent = { $lt: 95 };
     const result: PaginationResult<any> = await paginate(
       VideoProgress,
-      { userId: req.params.userId },
+      query,
       { page: Number(req.query.page), limit: Number(req.query.limit) },
       { lastWatchedAt: -1 }
     );

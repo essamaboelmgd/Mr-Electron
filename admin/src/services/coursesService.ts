@@ -4,10 +4,11 @@ export type Term = 'first' | 'second';
 export interface Course { _id: string; id?: string; title: string; educationalLevel: { _id: string; name: string; nameAr: string; level: 'primary' | 'prep'; year: number }; term: Term; description?: string; order: number; isActive: boolean; lessonCount?: number; examCount?: number; access?: string; shortDescription: string; fullDescription: string; price: number; image: string; vodafoneNumber: string; month: number; createdAt: string; updatedAt: string; }
 export interface Lesson { _id: string; id?: string; courseId: string; title: string; duration: number; description?: string; order: number; videoProvider?: 'youtube' | 'vimeo' | 'bunny' | null; videoId?: string | null; videoUrl?: string | null; videoStatus?: 'ready' | 'processing' | 'failed'; access?: string; isLocked?: boolean; }
 export interface CourseExam { _id: string; title: string; timeLimitMin: number; totalMarks: number; }
+export interface Pagination { currentPage: number; totalPages: number; totalItems: number; itemsPerPage: number; hasNextPage: boolean; hasPrevPage: boolean; }
 
-export const getCourses = async (params: { term?: Term; educationalLevel?: string; isActive?: boolean } = {}): Promise<Course[]> => { const response = await api.get<{ data: Course[] }>('/courses', { params }); return response.data.data; };
+export const getCourses = async (params: { term?: Term; educationalLevel?: string; isActive?: boolean; search?: string; page?: number; limit?: number } = {}): Promise<{ courses: Course[]; pagination: Pagination }> => { const response = await api.get<{ data: Course[]; pagination: Pagination }>('/courses', { params }); return { courses: response.data.data, pagination: response.data.pagination }; };
 export const getCourseById = async (id: string): Promise<Course> => { const response = await api.get<{ data: { course: Course } }>(`/courses/${id}`); return response.data.data.course; };
-export const getCourseLessons = async (id: string): Promise<Lesson[]> => { const response = await api.get<{ data: Lesson[] }>(`/courses/${id}/lessons`); return response.data.data; };
+export const getCourseLessons = async (id: string, params: { page?: number; limit?: number } = {}): Promise<{ lessons: Lesson[]; pagination: Pagination }> => { const response = await api.get<{ data: Lesson[]; pagination: Pagination }>(`/courses/${id}/lessons`, { params }); return { lessons: response.data.data, pagination: response.data.pagination }; };
 export const createCourse = async (data: Pick<Course, 'title' | 'term' | 'description' | 'order' | 'isActive'> & { educationalLevel: string }) => { const response = await api.post<{ data: { course: Course } }>('/admin/courses', data); return response.data.data.course; };
 export const updateCourse = async (id: string, data: Partial<Pick<Course, 'title' | 'term' | 'description' | 'order' | 'isActive'>> & { educationalLevel?: string }) => { const response = await api.put<{ data: { course: Course } }>(`/admin/courses/${id}`, data); return response.data.data.course; };
 export const deleteCourse = async (id: string) => api.delete(`/admin/courses/${id}`);
@@ -78,4 +79,4 @@ export const uploadFileToBunny = (upload: BunnyUpload, file: File, onProgress?: 
   createRequest.send();
 });
 export const deleteLesson = async (id: string) => api.delete(`/admin/lessons/${id}`);
-export const getCourseExams = async (courseId: string): Promise<CourseExam[]> => { const response = await api.get<{ data: CourseExam[] }>('/exams', { params: { courseId, type: 'course' } }); return response.data.data; };
+export const getCourseExams = async (courseId: string): Promise<CourseExam[]> => { const response = await api.get<{ data: CourseExam[] }>('/exams', { params: { courseId, type: 'course', limit: 100 } }); return response.data.data; };

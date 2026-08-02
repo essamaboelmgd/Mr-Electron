@@ -3,6 +3,15 @@ import type { Exam } from './examsService';
 
 export type Term = 'first' | 'second';
 
+export interface Pagination {
+  currentPage: number;
+  totalPages: number;
+  totalItems: number;
+  itemsPerPage: number;
+  hasNextPage: boolean;
+  hasPrevPage: boolean;
+}
+
 export interface Course {
   _id: string;
   id?: string;
@@ -40,9 +49,23 @@ export interface Lesson {
   order: number;
 }
 
-export const getCourses = async (term?: Term): Promise<Course[]> => {
-  const response = await api.get<{ data: Course[] }>(`/courses${term ? `?term=${term}` : ''}`);
-  return response.data.data;
+export interface LessonVideoData {
+  videoUrl: string;
+  provider: 'youtube' | 'vimeo' | 'bunny';
+  videoId: string;
+  videoStatus?: string;
+  progress?: {
+    watchedSeconds: number;
+    lastPositionSeconds: number;
+    durationSeconds: number;
+    completionPercent: number;
+    sessionCount: number;
+  } | null;
+}
+
+export const getCourses = async (params: { term?: Term; page?: number; limit?: number } = {}): Promise<{ courses: Course[]; pagination: Pagination }> => {
+  const response = await api.get<{ data: Course[]; pagination: Pagination }>('/courses', { params });
+  return { courses: response.data.data, pagination: response.data.pagination };
 };
 
 export const getCourseById = async (id: string): Promise<Course> => {
@@ -50,13 +73,13 @@ export const getCourseById = async (id: string): Promise<Course> => {
   return response.data.data.course;
 };
 
-export const getCourseLessons = async (courseId: string): Promise<Lesson[]> => {
-  const response = await api.get<{ data: Lesson[] }>(`/courses/${courseId}/lessons`);
-  return response.data.data;
+export const getCourseLessons = async (courseId: string, params: { page?: number; limit?: number } = {}): Promise<{ lessons: Lesson[]; pagination: Pagination }> => {
+  const response = await api.get<{ data: Lesson[]; pagination: Pagination }>(`/courses/${courseId}/lessons`, { params });
+  return { lessons: response.data.data, pagination: response.data.pagination };
 };
 
-export const getLessonVideoUrl = async (lessonId: string): Promise<{ videoUrl: string; provider: 'youtube' | 'vimeo' | 'bunny'; videoId: string; videoStatus?: string }> => {
-  const response = await api.get<{ data: { videoUrl: string; provider: 'youtube' | 'vimeo' | 'bunny'; videoId: string; videoStatus?: string } }>(`/courses/${lessonId}/video-url`);
+export const getLessonVideoUrl = async (lessonId: string): Promise<LessonVideoData> => {
+  const response = await api.get<{ data: LessonVideoData }>(`/courses/${lessonId}/video-url`);
   return response.data.data;
 };
 
@@ -66,12 +89,10 @@ export const recordVideoEvent = async (lessonId: string, data: {
   positionSeconds: number;
   durationSeconds: number;
   watchedDeltaSeconds: number;
+  sequence: number;
 }) => api.post(`/courses/${lessonId}/video-events`, data);
 
 export const getCourseExams = async (courseId: string): Promise<Exam[]> => {
-  const response = await api.get<{ data: Exam[] }>('/exams/user?type=course');
-  return response.data.data.filter((exam) => {
-    const linkedCourse = typeof exam.courseId === 'object' ? exam.courseId?._id : exam.courseId;
-    return linkedCourse === courseId;
-  });
+  const response = await api.get<{ data: Exam[] }>('/exams/user', { params: { type: 'course', courseId, limit: 100 } });
+  return response.data.data;
 };

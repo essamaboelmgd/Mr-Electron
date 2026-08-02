@@ -5,6 +5,11 @@ export interface IAttemptAnswer {
   selectedOption: string;
 }
 
+export interface IAttemptOptionOrder {
+  questionId: mongoose.Types.ObjectId;
+  optionIds: string[];
+}
+
 export interface IExamAttempt extends Document {
   userId: mongoose.Types.ObjectId;
   examId: mongoose.Types.ObjectId;
@@ -15,7 +20,9 @@ export interface IExamAttempt extends Document {
   startedAt: Date;
   expiresAt?: Date | null;
   submittedAt?: Date | null;
-  submittedReason?: 'manual' | 'timeout';
+  submittedReason?: 'manual' | 'auto' | 'timeout';
+  questionOrder: mongoose.Types.ObjectId[];
+  optionOrder: IAttemptOptionOrder[];
   score?: number;
   totalMarks?: number;
   createdAt: Date;
@@ -39,7 +46,12 @@ const ExamAttemptSchema = new Schema<IExamAttempt>({
   startedAt: { type: Date, default: Date.now },
   expiresAt: { type: Date, required: false, default: null },
   submittedAt: { type: Date, required: false, default: null },
-  submittedReason: { type: String, enum: ['manual', 'timeout'], required: false },
+  submittedReason: { type: String, enum: ['manual', 'auto', 'timeout'], required: false },
+  questionOrder: [{ type: Schema.Types.ObjectId, ref: 'Question' }],
+  optionOrder: [{
+    questionId: { type: Schema.Types.ObjectId, ref: 'Question', required: true },
+    optionIds: [{ type: String, required: true }]
+  }],
   score: { type: Number, min: 0, required: false },
   totalMarks: { type: Number, min: 0, required: false }
 }, { timestamps: true });

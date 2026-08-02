@@ -1,7 +1,7 @@
 import { FormEvent, useState } from 'react';
 import type { AxiosError } from 'axios';
 import { ArrowLeft, Eye, EyeOff, Settings2 } from 'lucide-react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate } from '@/lib/router';
 import { login, setAuthToken, setAuthUser } from '@/services/authService';
 import { useAuth } from '@/contexts/AuthContext';
 

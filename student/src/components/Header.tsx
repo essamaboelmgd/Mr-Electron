@@ -1,6 +1,6 @@
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { ChevronDown, Home, LogOut, Settings } from 'lucide-react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate } from '@/lib/router';
 import { useAuth } from '@/contexts/AuthContext';
 import type { User } from '@/services/authService';
 
@@ -10,6 +10,23 @@ export const Header = ({ student }: { student: User }) => {
   const navigate = useNavigate();
   const { logout } = useAuth();
   const [menuOpen, setMenuOpen] = useState(false);
+  const profileRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!menuOpen) return undefined;
+    const onPointerDown = (event: PointerEvent) => {
+      if (!profileRef.current?.contains(event.target as Node)) setMenuOpen(false);
+    };
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') setMenuOpen(false);
+    };
+    document.addEventListener('pointerdown', onPointerDown);
+    document.addEventListener('keydown', onKeyDown);
+    return () => {
+      document.removeEventListener('pointerdown', onPointerDown);
+      document.removeEventListener('keydown', onKeyDown);
+    };
+  }, [menuOpen]);
 
   const handleLogout = () => {
     logout();
@@ -25,16 +42,16 @@ export const Header = ({ student }: { student: User }) => {
         </button>
         <div className="topbar-actions">
           <span className="welcome-chip">أهلًا، {student.name.split(' ')[0]}</span>
-          <div className="profile-wrap">
-            <button className="profile-button" type="button" onClick={() => setMenuOpen((value) => !value)} aria-expanded={menuOpen}>
+          <div ref={profileRef} className="profile-wrap">
+            <button className="profile-button" type="button" onClick={() => setMenuOpen((value) => !value)} aria-expanded={menuOpen} aria-haspopup="menu" aria-controls="student-profile-menu">
               <span className="profile-avatar">{student.name.charAt(0)}</span>
               <ChevronDown size={16} />
             </button>
             {menuOpen && (
-              <div className="profile-menu">
-                <a className="profile-link" href={landingUrl}><Home size={16} /> الصفحة التعريفية</a>
-                <button type="button" onClick={() => { setMenuOpen(false); navigate('/settings'); }}><Settings size={16} /> الإعدادات</button>
-                <button type="button" className="danger-action" onClick={handleLogout}><LogOut size={16} /> تسجيل الخروج</button>
+              <div id="student-profile-menu" className="profile-menu" role="menu">
+                <a role="menuitem" className="profile-link" href={landingUrl}><Home size={16} /> الصفحة التعريفية</a>
+                <button role="menuitem" type="button" onClick={() => { setMenuOpen(false); navigate('/settings'); }}><Settings size={16} /> الإعدادات</button>
+                <button role="menuitem" type="button" className="danger-action" onClick={handleLogout}><LogOut size={16} /> تسجيل الخروج</button>
               </div>
             )}
           </div>

@@ -1,5 +1,5 @@
 import { ChevronLeft, LockKeyhole, PlayCircle } from 'lucide-react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate } from '@/lib/router';
 import type { Course } from '@/services/coursesService';
 
 export default function CourseCard({ course }: { course: Course }) {

@@ -1,6 +1,6 @@
 import { FormEvent, useState } from 'react';
 import type { AxiosError } from 'axios';
-import { Link, useNavigate } from 'react-router-dom';
+import { Link, useNavigate } from '@/lib/router';
 import { ArrowLeft, Atom, Eye, EyeOff } from 'lucide-react';
 import { login, setAuthToken, setAuthUser } from '@/services/authService';
 import { useAuth } from '@/contexts/AuthContext';

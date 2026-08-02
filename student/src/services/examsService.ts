@@ -6,6 +6,24 @@ export interface LinkedCourse {
   term: 'first' | 'second';
 }
 
+export interface StudentExamState {
+  attemptsCount: number;
+  latestAttempt?: {
+    id: string;
+    attemptNumber: number;
+    score: number;
+    totalMarks: number;
+    percentage: number;
+    submittedAt: string;
+    reviewedAt?: string | null;
+  };
+  reviewAttemptId?: string;
+  reviewed: boolean;
+  reviewAvailable: boolean;
+  canReview: boolean;
+  canRetake: boolean;
+}
+
 export interface Exam {
   _id: string;
   courseId: string | null | LinkedCourse;
@@ -18,7 +36,10 @@ export interface Exam {
   maxAttempts: number;
   reviewMode: 'closed' | 'open' | 'scheduled';
   reviewReleaseAt?: string | null;
+  shuffleQuestions: boolean;
+  shuffleOptions: boolean;
   createdAt?: string;
+  studentState?: StudentExamState;
 }
 
 export interface Question {
@@ -47,9 +68,10 @@ export interface Submission {
   score: number;
   totalMarks: number;
   submittedAt: string;
+  reviewedAt?: string | null;
   attemptId?: string;
   attemptNumber?: number;
-  submittedReason?: 'manual' | 'timeout' | 'legacy';
+  submittedReason?: 'manual' | 'auto' | 'timeout' | 'legacy';
 }
 
 export interface ExamPolicy {
@@ -68,6 +90,8 @@ export interface ExamAttempt {
   startedAt: string;
   expiresAt?: string | null;
   remainingSeconds?: number | null;
+  questionOrder?: string[];
+  optionOrder?: Array<{ questionId: string; optionIds: string[] }>;
 }
 
 export interface ExamResult {
@@ -75,17 +99,29 @@ export interface ExamResult {
   percentage: number;
   isPassed: boolean;
   attempts?: Array<Submission & { percentage: number; isPassed: boolean }>;
+  reviewed?: boolean;
+  reviewedAt?: string | null;
+  reviewAttemptId?: string;
   policy?: ExamPolicy;
 }
 
+export interface Pagination {
+  currentPage: number;
+  totalPages: number;
+  totalItems: number;
+  itemsPerPage: number;
+  hasNextPage: boolean;
+  hasPrevPage: boolean;
+}
+
 export const getExams = async (): Promise<Exam[]> => {
-  const response = await api.get<{ data: Exam[] }>('/exams');
+  const response = await api.get<{ data: Exam[] }>('/exams', { params: { limit: 100 } });
   return response.data.data;
 };
 
-export const getUserExams = async (type?: 'course' | 'general'): Promise<Exam[]> => {
-  const response = await api.get<{ data: Exam[] }>(`/exams/user${type ? `?type=${type}` : ''}`);
-  return response.data.data;
+export const getUserExams = async (params: { type?: 'course' | 'general'; courseId?: string; page?: number; limit?: number } = {}): Promise<{ exams: Exam[]; pagination: Pagination }> => {
+  const response = await api.get<{ data: Exam[]; pagination: Pagination }>('/exams/user', { params });
+  return { exams: response.data.data, pagination: response.data.pagination };
 };
 
 export const getExamById = async (id: string): Promise<Exam> => {

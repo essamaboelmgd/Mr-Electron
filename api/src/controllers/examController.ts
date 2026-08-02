@@ -1,4 +1,5 @@
 import { Request, Response } from 'express';
+import { randomInt } from 'crypto';
 import { AppError } from '../middleware/errorHandler';
 import Exam from '../models/Exam';
 import Question from '../models/Question';
@@ -75,7 +76,12 @@ const serializeAttempt = (attempt: any) => {
     currentQuestion: attempt.currentQuestion || 0,
     startedAt: attempt.startedAt,
     expiresAt,
-    remainingSeconds: expiresAt ? Math.max(0, Math.floor((expiresAt.getTime() - Date.now()) / 1000)) : null
+    remainingSeconds: expiresAt ? Math.max(0, Math.floor((expiresAt.getTime() - Date.now()) / 1000)) : null,
+    questionOrder: (attempt.questionOrder || []).map((questionId: any) => String(questionId)),
+    optionOrder: (attempt.optionOrder || []).map((entry: any) => ({
+      questionId: String(entry.questionId),
+      optionIds: Array.isArray(entry.optionIds) ? entry.optionIds : []
+    }))
   };
 };
 
@@ -91,24 +97,114 @@ const getQuestionsForExam = (examId: string) => Question.find({
   onModel: 'Exam'
 }).sort({ order: 1 });
 
+const shuffle = <T>(items: T[]): T[] => {
+  const result = [...items];
+  for (let index = result.length - 1; index > 0; index -= 1) {
+    const target = randomInt(index + 1);
+    [result[index], result[target]] = [result[target], result[index]];
+  }
+  return result;
+};
+
+const createAttemptOrdering = async (exam: any) => {
+  const questions = await getQuestionsForExam(String(exam._id));
+  const orderedQuestions = exam.shuffleQuestions ? shuffle(questions) : questions;
+  return {
+    questionOrder: orderedQuestions.map((question: any) => question._id),
+    optionOrder: orderedQuestions.map((question: any) => ({
+      questionId: question._id,
+      optionIds: exam.shuffleOptions
+        ? shuffle((question.options || []).map((option: any) => String(option.id)))
+        : (question.options || []).map((option: any) => String(option.id))
+    }))
+  };
+};
+
+const orderQuestionsForAttempt = (questions: any[], attempt?: any) => {
+  if (!attempt?.questionOrder?.length && !attempt?.optionOrder?.length) return questions;
+  const byId = new Map(questions.map((question: any) => [String(question._id), question]));
+  const ordered = (attempt.questionOrder || [])
+    .map((questionId: any) => byId.get(String(questionId)))
+    .filter(Boolean);
+  const seen = new Set(ordered.map((question: any) => String(question._id)));
+  questions.forEach((question: any) => {
+    if (!seen.has(String(question._id))) ordered.push(question);
+  });
+
+  const optionOrder = new Map<string, string[]>((attempt.optionOrder || []).map((entry: any) => [
+    String(entry.questionId),
+    Array.isArray(entry.optionIds) ? entry.optionIds.map((optionId: any) => String(optionId)) : []
+  ] as [string, string[]]));
+  return ordered.map((question: any) => {
+    const ids = optionOrder.get(String(question._id));
+    if (!ids?.length || !question.options?.length) return question;
+    const optionsById = new Map(question.options.map((option: any) => [String(option.id), option]));
+    const options = ids.map((optionId: string) => optionsById.get(optionId)).filter(Boolean);
+    const existing = new Set(options.map((option: any) => String(option.id)));
+    question.options.forEach((option: any) => {
+      if (!existing.has(String(option.id))) options.push(option);
+    });
+    return { ...question.toObject(), options };
+  });
+};
+
+const ensureAttemptOrdering = async (exam: any, attempt: any) => {
+  if (attempt.questionOrder?.length || attempt.optionOrder?.length) return attempt;
+  const ordering = await createAttemptOrdering(exam);
+  return ExamAttempt.findByIdAndUpdate(attempt._id, { $set: ordering }, { new: true });
+};
+
 const latestSubmission = (userId: unknown, examId: string) => Submission.findOne({
   userId,
   examId,
   onModel: 'Exam'
 }).sort({ submittedAt: -1 });
 
+const serializeStudentExamState = (exam: any, submissions: any[]) => {
+  const latest = submissions[0];
+  const reviewedSubmission = submissions.find((submission) => Boolean(submission.reviewedAt));
+  const maxAttempts = Math.max(1, Number(exam.maxAttempts) || 1);
+  const reviewAvailable = reviewIsAvailable(exam);
+  return {
+    attemptsCount: submissions.length,
+    latestAttempt: latest ? {
+      id: String(latest._id),
+      attemptNumber: latest.attemptNumber || submissions.length,
+      score: latest.score || 0,
+      totalMarks: latest.totalMarks || 0,
+      percentage: percentageFor(latest),
+      submittedAt: latest.submittedAt,
+      reviewedAt: latest.reviewedAt || null
+    } : undefined,
+    reviewAttemptId: reviewedSubmission ? String(reviewedSubmission._id) : latest ? String(latest._id) : undefined,
+    reviewed: Boolean(reviewedSubmission),
+    reviewAvailable,
+    canReview: Boolean(latest && reviewAvailable),
+    canRetake: submissions.length < maxAttempts && !reviewedSubmission
+  };
+};
+
 const startAttempt = async (req: Request, exam: any) => {
   const userId = currentUserId(req);
   const active = await ExamAttempt.findOne({ userId, examId: exam._id, status: 'in_progress' }).sort({ createdAt: -1 });
   if (active) {
     if (active.expiresAt && active.expiresAt.getTime() <= Date.now()) {
-      await finalizeAttempt(req, exam, active, active.answers, 'timeout');
+      await finalizeAttempt(req, exam, active, active.answers, 'auto');
     } else {
-      return active;
+      return ensureAttemptOrdering(exam, active);
     }
   }
 
   const completedAttempts = await Submission.countDocuments({ userId, examId: exam._id, onModel: 'Exam' });
+  const reviewedSubmission = await Submission.exists({
+    userId,
+    examId: exam._id,
+    onModel: 'Exam',
+    reviewedAt: { $exists: true, $ne: null }
+  });
+  if (reviewedSubmission) {
+    throw new AppError('بعد مراجعة الإجابات لا يمكن إعادة هذا الامتحان.', 400);
+  }
   const maxAttempts = Math.max(1, Number(exam.maxAttempts) || 1);
   if (completedAttempts >= maxAttempts) {
     throw new AppError('استنفدت عدد المحاولات المسموح بها لهذا الامتحان.', 400);
@@ -118,6 +214,7 @@ const startAttempt = async (req: Request, exam: any) => {
   const expiresAt = Number(exam.timeLimitMin) > 0
     ? new Date(startedAt.getTime() + Number(exam.timeLimitMin) * 60 * 1000)
     : null;
+  const ordering = await createAttemptOrdering(exam);
   return ExamAttempt.create({
     userId,
     examId: exam._id,
@@ -126,7 +223,8 @@ const startAttempt = async (req: Request, exam: any) => {
     answers: [],
     currentQuestion: 0,
     startedAt,
-    expiresAt
+    expiresAt,
+    ...ordering
   });
 };
 
@@ -135,7 +233,7 @@ const finalizeAttempt = async (
   exam: any,
   attempt: any,
   answers: any[],
-  reason: 'manual' | 'timeout'
+  reason: 'manual' | 'auto'
 ) => {
   const existing = await Submission.findOne({ attemptId: attempt._id, onModel: 'Exam' });
   if (existing) return existing;
@@ -145,7 +243,7 @@ const finalizeAttempt = async (
   const submittedAt = new Date();
   await ExamAttempt.findByIdAndUpdate(attempt._id, {
     $set: {
-      status: reason === 'timeout' ? 'expired' : 'submitted',
+      status: reason === 'auto' ? 'expired' : 'submitted',
       answers: result.answers,
       submittedAt,
       submittedReason: reason,
@@ -212,7 +310,7 @@ export const getExams = async (req: Request, res: Response): Promise<void> => {
 export const getUserExams = async (req: Request, res: Response): Promise<void> => {
   try {
     if (!req.user) throw new AppError('يجب تسجيل الدخول أولًا', 401);
-    const { page, limit, type } = req.query;
+    const { page, limit, type, courseId } = req.query;
     const levelId = req.user.educationalLevel?._id || req.user.educationalLevel;
     const activeCourses = await CourseAccess.find({ userId: req.user._id, enabled: true }).distinct('courseId');
     const query: any = { isActive: true };
@@ -223,6 +321,7 @@ export const getUserExams = async (req: Request, res: Response): Promise<void> =
     } else if (type === 'course') {
       query.type = 'course';
       query.courseId = { $in: activeCourses };
+      if (courseId && activeCourses.some((id: any) => String(id) === String(courseId))) query.courseId = courseId;
     } else {
       query.$or = [
         { type: 'general', educationalLevel: levelId },
@@ -237,7 +336,27 @@ export const getUserExams = async (req: Request, res: Response): Promise<void> =
       { createdAt: -1 }
     );
     const data = await Exam.populate(result.data, { path: 'courseId', select: 'title term order educationalLevel' });
-    res.status(200).json({ status: 'success', data, pagination: result.pagination });
+    const examIds = data.map((exam: any) => exam._id);
+    const submissions = await Submission.find({
+      userId: req.user._id,
+      examId: { $in: examIds },
+      onModel: 'Exam'
+    }).sort({ submittedAt: -1 }).lean();
+    const submissionsByExam = new Map<string, any[]>();
+    submissions.forEach((submission: any) => {
+      const key = String(submission.examId);
+      const current = submissionsByExam.get(key) || [];
+      current.push(submission);
+      submissionsByExam.set(key, current);
+    });
+    const serialized = data.map((exam: any) => {
+      const plainExam = exam.toObject ? exam.toObject() : exam;
+      return {
+        ...plainExam,
+        studentState: serializeStudentExamState(exam, submissionsByExam.get(String(exam._id)) || [])
+      };
+    });
+    res.status(200).json({ status: 'success', data: serialized, pagination: result.pagination });
   } catch (error: any) {
     res.status(error.statusCode || 500).json({
       status: error.statusCode && error.statusCode < 500 ? 'fail' : 'error',
@@ -261,21 +380,39 @@ export const getExamById = async (req: Request, res: Response): Promise<void> =>
 export const getExamQuestions = async (req: Request, res: Response): Promise<void> => {
   try {
     const exam = await getExamOrThrow(req);
-    const questions = await getQuestionsForExam(String(exam._id));
     const wantsReview = req.query.review === 'true';
     let canReview = isContentManager(req.user);
+    let ownedSubmission: any = null;
+    let attempt: any = null;
     if (wantsReview && !canReview) {
       if (!reviewIsAvailable(exam)) throw new AppError('مراجعة الإجابات غير متاحة حاليًا.', 403);
       const submission = req.query.attemptId
         ? await Submission.findOne({ _id: req.query.attemptId, userId: req.user?._id, examId: exam._id, onModel: 'Exam' })
         : await latestSubmission(req.user?._id, String(exam._id));
-      canReview = Boolean(submission);
+      ownedSubmission = submission;
+      canReview = Boolean(ownedSubmission);
+      if (!ownedSubmission) throw new AppError('لم يتم العثور على نتيجة لهذا الامتحان.', 404);
+      attempt = ownedSubmission.attemptId
+        ? await ExamAttempt.findOne({ _id: ownedSubmission.attemptId, userId: req.user?._id, examId: exam._id })
+        : null;
+    }
+
+    if (!wantsReview && req.query.attemptId && !isContentManager(req.user)) {
+      attempt = await ExamAttempt.findOne({ _id: req.query.attemptId, userId: req.user?._id, examId: exam._id });
+      if (!attempt) throw new AppError('محاولة الامتحان غير موجودة.', 404);
+    }
+
+    const questions = orderQuestionsForAttempt(await getQuestionsForExam(String(exam._id)), attempt);
+
+    if (wantsReview && ownedSubmission && !ownedSubmission.reviewedAt) {
+      ownedSubmission.reviewedAt = new Date();
+      await ownedSubmission.save();
     }
 
     const safeQuestions = canReview
       ? questions
       : questions.map((question: any) => {
-        const data = question.toObject();
+        const data = question.toObject ? question.toObject() : { ...question };
         delete data.correct;
         delete data.explanation;
         return data;
@@ -318,7 +455,7 @@ export const saveExamAttempt = async (req: Request, res: Response): Promise<void
     const attempt = await getOwnedAttempt(req);
     if (attempt.status !== 'in_progress') throw new AppError('هذه المحاولة انتهت بالفعل.', 400);
     if (attempt.expiresAt && attempt.expiresAt.getTime() <= Date.now()) {
-      const submission = await finalizeAttempt(req, exam, attempt, attempt.answers, 'timeout');
+      const submission = await finalizeAttempt(req, exam, attempt, attempt.answers, 'auto');
       throw new AppError(`انتهى وقت الامتحان. تم التسليم بدرجة ${submission.score} من ${submission.totalMarks}.`, 400);
     }
     const questions = await getQuestionsForExam(String(exam._id));
@@ -350,7 +487,7 @@ export const submitExamAttempt = async (req: Request, res: Response): Promise<vo
     }
     const timedOut = Boolean(attempt.expiresAt && attempt.expiresAt.getTime() <= Date.now());
     const answers = Array.isArray(req.body?.answers) ? req.body.answers : attempt.answers;
-    const submission = await finalizeAttempt(req, exam, attempt, answers, timedOut ? 'timeout' : 'manual');
+    const submission = await finalizeAttempt(req, exam, attempt, answers, timedOut ? 'auto' : 'manual');
     res.status(201).json({ status: 'success', data: { submission, score: submission.score, totalMarks: submission.totalMarks } });
   } catch (error: any) {
     res.status(error.statusCode || 500).json({
@@ -423,6 +560,9 @@ export const getExamResults = async (req: Request, res: Response): Promise<void>
           percentage: percentageFor(submission),
           isPassed: percentageFor(submission) >= 50
         })),
+        reviewed: submissions.some((submission: any) => Boolean(submission.reviewedAt)),
+        reviewedAt: submissions.find((submission: any) => Boolean(submission.reviewedAt))?.reviewedAt || null,
+        reviewAttemptId: submissions.find((submission: any) => Boolean(submission.reviewedAt))?._id || submissions[0]._id,
         policy: examPolicy(exam)
       }
     });

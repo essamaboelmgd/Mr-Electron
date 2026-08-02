@@ -35,7 +35,8 @@ const userLevelId = (req: Request): string | null => {
 };
 
 const errorResponse = (res: Response, error: any, fallback = 'حدث خطأ أثناء تحميل المحتوى') => {
-  const statusCode = error?.statusCode || (error?.name === 'CastError' ? 400 : 500);
+  const isBunnyConfigError = String(error?.message || '').startsWith('Bunny Stream is not configured');
+  const statusCode = error?.statusCode || (error?.name === 'CastError' ? 400 : isBunnyConfigError ? 503 : 500);
   res.status(statusCode).json({
     status: statusCode >= 500 ? 'error' : 'fail',
     message: error?.name === 'CastError' ? 'المعرّف غير صحيح' : error?.message || fallback
@@ -144,7 +145,7 @@ const assertStudentCourseVisibility = (req: Request, course: any) => {
 
 export const getCourses = async (req: Request, res: Response): Promise<void> => {
   try {
-    const { page, limit, educationalLevel, term, isActive } = req.query;
+    const { page, limit, educationalLevel, term, isActive, search } = req.query;
     const query: any = {};
     const manager = isContentManager(req.user);
 
@@ -159,6 +160,9 @@ export const getCourses = async (req: Request, res: Response): Promise<void> => 
       query.isActive = isActive === 'true';
     }
     if (term === 'first' || term === 'second') query.term = term;
+    if (manager && search) {
+      query.title = new RegExp(String(search).trim().replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'i');
+    }
 
     const result: PaginationResult<any> = await paginate(
       Course,
@@ -277,13 +281,23 @@ export const getLessonVideoUrl = async (req: Request, res: Response): Promise<vo
     const videoUrl = video.provider === 'bunny'
       ? createBunnyEmbedUrl(video.videoId, Number(process.env.BUNNY_PLAYBACK_EXPIRY_SECONDS || 900))
       : video.embedUrl;
+    const progress = await VideoProgress.findOne({ userId: req.user._id, lessonId: lesson._id }).lean();
     res.status(200).json({
       status: 'success',
       data: {
         videoUrl,
         provider: video.provider,
         videoId: video.videoId,
-        videoStatus: lesson.videoStatus || 'ready'
+        videoStatus: lesson.videoStatus || 'ready',
+        progress: progress ? {
+          watchedSeconds: progress.watchedSeconds || 0,
+          lastPositionSeconds: progress.lastPositionSeconds || 0,
+          durationSeconds: progress.durationSeconds || 0,
+          completionPercent: progress.completionPercent || 0,
+          sessionCount: progress.sessionCount || 0,
+          lastWatchedAt: progress.lastWatchedAt || null,
+          completedAt: progress.completedAt || null
+        } : null
       }
     });
   } catch (error: any) {
@@ -308,15 +322,16 @@ export const recordVideoEvent = async (req: Request, res: Response): Promise<voi
       event = 'timeupdate',
       positionSeconds = 0,
       durationSeconds = 0,
-      watchedDeltaSeconds = 0
+      watchedDeltaSeconds = 0,
+      sequence = 0
     } = req.body || {};
     if (!sessionId || typeof sessionId !== 'string' || sessionId.length > 120) {
       throw new AppError('جلسة الفيديو غير صحيحة', 400);
     }
 
-    const position = Math.max(0, Number(positionSeconds) || 0);
     const duration = Math.max(0, Number(durationSeconds) || 0);
-    const watchedDelta = Math.min(60, Math.max(0, Number(watchedDeltaSeconds) || 0));
+    const position = Math.min(duration || Number.POSITIVE_INFINITY, Math.max(0, Number(positionSeconds) || 0));
+    const sequenceNumber = Math.max(0, Math.floor(Number(sequence) || 0));
     const now = new Date();
     const existingSession = await VideoWatchSession.findOne({
       userId: req.user._id,
@@ -335,7 +350,9 @@ export const recordVideoEvent = async (req: Request, res: Response): Promise<voi
           lastPositionSeconds: position,
           durationSeconds: duration,
           startedAt: now,
-          lastWatchedAt: now
+          lastWatchedAt: now,
+          lastSequence: 0,
+          lastEventAt: now
         });
         isNewSession = true;
       } catch (createError: any) {
@@ -344,30 +361,51 @@ export const recordVideoEvent = async (req: Request, res: Response): Promise<voi
         if (!session) throw createError;
       }
     }
-    const nextWatched = Math.min(24 * 60 * 60, session.watchedSeconds + watchedDelta);
+    if (sequenceNumber > 0 && sequenceNumber <= Number(session.lastSequence || 0)) {
+      const progress = await VideoProgress.findOne({ userId: req.user._id, lessonId: lesson._id });
+      res.status(200).json({ status: 'success', data: { progress, duplicate: true } });
+      return;
+    }
+    const elapsedSinceLastEvent = Math.max(0, (now.getTime() - new Date(session.lastEventAt || session.lastWatchedAt).getTime()) / 1000);
+    const requestedDelta = Math.max(0, Number(watchedDeltaSeconds) || 0);
+    const watchedDelta = event === 'seeked' || event === 'play'
+      ? 0
+      : Math.min(30, requestedDelta, Math.max(2, elapsedSinceLastEvent + 3));
     const completionPercent = duration > 0
       ? Math.min(100, Math.round((position / duration) * 100))
       : 0;
     const completed = event === 'ended' || completionPercent >= 95;
 
-    await VideoWatchSession.findByIdAndUpdate(session._id, {
+    const acceptedSession = await VideoWatchSession.findOneAndUpdate({
+      _id: session._id,
+      ...(sequenceNumber > 0 ? { lastSequence: { $lt: sequenceNumber } } : {})
+    }, {
       $set: {
-        watchedSeconds: nextWatched,
         lastPositionSeconds: position,
         durationSeconds: Math.max(session.durationSeconds || 0, duration),
         lastWatchedAt: now,
+        lastEventAt: now,
+        ...(sequenceNumber > 0 ? { lastSequence: sequenceNumber } : {}),
         ...(completed ? { completedAt: now } : {})
-      }
-    });
+      },
+      $inc: { watchedSeconds: watchedDelta }
+    }, { new: true });
+    if (!acceptedSession) {
+      const progress = await VideoProgress.findOne({ userId: req.user._id, lessonId: lesson._id });
+      res.status(200).json({ status: 'success', data: { progress, duplicate: true } });
+      return;
+    }
     const progress = await VideoProgress.findOneAndUpdate(
       { userId: req.user._id, lessonId: lesson._id },
       {
         $set: {
           lastPositionSeconds: position,
-          durationSeconds: Math.max(session.durationSeconds || 0, duration),
-          completionPercent,
           lastWatchedAt: now,
           ...(completed ? { completedAt: now } : {})
+        },
+        $max: {
+          durationSeconds: Math.max(session.durationSeconds || 0, duration),
+          completionPercent
         },
         $inc: {
           watchedSeconds: watchedDelta,

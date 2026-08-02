@@ -1,6 +1,7 @@
 import { Router } from 'express';
 import { protect } from '../middleware/auth';
 import { requireAdmin } from '../controllers/adminController';
+import { downloadExamResultsReport, downloadStudentReport } from '../controllers/reportController';
 import { uploadNoteImage, uploadQuestionImage } from '../middleware/upload';
 import { 
   createCourse, 
@@ -60,6 +61,7 @@ router.post('/lessons/:lessonId/bunny-upload/complete', completeBunnyUpload);
 
 // Exam management
 router.get('/exams', getAllExams);
+router.get('/exams/:examId/results.pdf', downloadExamResultsReport);
 router.get('/exams/:examId/submissions', getExamSubmissions);
 router.post('/exams', createExam);
 router.put('/exams/:id', updateExam);
@@ -89,6 +91,7 @@ router.delete('/questions/:id', deleteQuestion);
 
 // User management
 router.get('/users', getAllUsers);
+router.get('/users/:userId/report.pdf', downloadStudentReport);
 router.get('/users/:userId/overview', getStudentOverview);
 router.get('/users/:userId/exam-attempts', getStudentExamAttempts);
 router.get('/users/:userId/video-activity', getStudentVideoActivity);

@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { ArrowLeft, BookOpen, CheckCircle2, ChevronLeft, LockKeyhole, PlayCircle, Sparkles } from 'lucide-react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate } from '@/lib/router';
 import { AppShell } from '@/components/AppShell';
 import { useAuth } from '@/contexts/AuthContext';
 import { Course, getCourses } from '@/services/coursesService';
@@ -17,7 +17,7 @@ export default function Dashboard() {
   const [error, setError] = useState('');
 
   useEffect(() => {
-    Promise.all([getCourses(), getUserExams()]).then(([chapters, availableExams]) => { setCourses(chapters); setExams(availableExams); }).catch(() => setError('تعذر تحميل ملخص المنصة. أعد المحاولة.')).finally(() => setLoading(false));
+    Promise.all([getCourses({ limit: 6 }), getUserExams({ limit: 6 })]).then(([chapterData, examData]) => { setCourses(chapterData.courses); setExams(examData.exams); }).catch(() => setError('تعذر تحميل ملخص المنصة. أعد المحاولة.')).finally(() => setLoading(false));
   }, []);
 
   const activeChapters = courses.filter((course) => course.access === 'active').length;

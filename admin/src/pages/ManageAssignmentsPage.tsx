@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate } from '@/lib/router';
 import { AppShell } from '@/components/AppShell';
 import { Button } from '@/components/ui/button';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
@@ -110,7 +110,7 @@ export default function ManageAssignmentsPage() {
   const loadCourses = async () => {
     try {
       const coursesData = await getCourses();
-      setCourses(coursesData);
+      setCourses(coursesData.courses);
     } catch (error) {
       console.error('Error loading courses:', error);
       toast.error('حدث خطأ أثناء تحميل الكورسات');

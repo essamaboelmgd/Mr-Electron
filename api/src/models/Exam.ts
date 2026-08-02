@@ -14,6 +14,8 @@ export interface IExam extends Document {
   maxAttempts: number;
   reviewMode: 'closed' | 'open' | 'scheduled';
   reviewReleaseAt?: Date | null;
+  shuffleQuestions: boolean;
+  shuffleOptions: boolean;
   createdAt: Date;
   updatedAt: Date;
 }
@@ -82,6 +84,14 @@ const ExamSchema: Schema = new Schema({
     type: Date,
     required: false,
     default: null
+  },
+  shuffleQuestions: {
+    type: Boolean,
+    default: false
+  },
+  shuffleOptions: {
+    type: Boolean,
+    default: false
   }
 }, {
   timestamps: true
