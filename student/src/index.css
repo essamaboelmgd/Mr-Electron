@@ -420,3 +420,31 @@ body { overflow-x: hidden; }
     left: auto;
   }
 }
+
+/* Mobile navigation is a compact task list: keep only navigation and account actions in view. */
+@media (max-width: 820px) {
+  .sidebar-study-card,
+  .sidebar-note { display: none; }
+  .sidebar-content {
+    overflow: hidden;
+    padding: 18px 16px max(70px, env(safe-area-inset-bottom));
+  }
+  .sidebar-kicker { margin-bottom: 9px; }
+  .sidebar-nav { gap: 8px; }
+  .sidebar-nav-group + .sidebar-nav-group { padding-top: 9px; }
+  .nav-item { min-height: 42px; padding: 9px 11px; }
+  .sidebar-account { margin-top: 14px; padding-top: 12px; }
+  .sidebar-profile { padding: 9px; }
+  .sidebar-logout { min-height: 40px; }
+}
+
+@media (max-width: 820px) and (max-height: 640px) {
+  .sidebar-content { padding-top: 13px; padding-bottom: 60px; }
+  .sidebar-kicker { margin-bottom: 6px; }
+  .sidebar-nav { gap: 5px; }
+  .sidebar-nav-group + .sidebar-nav-group { padding-top: 6px; }
+  .nav-item { min-height: 38px; padding-block: 7px; }
+  .sidebar-account { margin-top: 9px; padding-top: 8px; }
+  .sidebar-profile { padding: 7px; }
+  .sidebar-logout { min-height: 36px; }
+}
