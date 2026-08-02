@@ -1,6 +1,6 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Check, ChevronDown, ChevronLeft, ChevronRight, Clock3, Download, FileText, LockKeyhole, Search, ShieldCheck, UserRound, Video } from 'lucide-react';
-import { useLocation, useNavigate, useParams } from '@/lib/router';
+import { useNavigate, useParams, useSearchParams } from '@/lib/router';
 import { AppShell } from '@/components/AppShell';
 import { EducationalLevel, getEducationalLevels } from '@/services/educationalLevelService';
 import {
@@ -29,10 +29,10 @@ const tabItems: Array<{ key: Tab; label: string }> = [
 
 export default function StudentsPage() {
   const navigate = useNavigate();
-  const location = useLocation();
   const { id: routeStudentId } = useParams<{ id: string }>();
-  const params = useMemo(() => new URLSearchParams(location.search), [location.search]);
-  const activeTab = (params.get('tab') as Tab) || 'overview';
+  const [searchParams, setSearchParams] = useSearchParams();
+  const requestedTab = searchParams.get('tab');
+  const activeTab: Tab = tabItems.find((item) => item.key === requestedTab)?.key || 'overview';
   const [students, setStudents] = useState<any[]>([]);
   const [levels, setLevels] = useState<EducationalLevel[]>([]);
   const [pagination, setPagination] = useState<Pagination | null>(null);
@@ -105,7 +105,11 @@ export default function StudentsPage() {
   useEffect(() => { setDetailPage(1); }, [attemptReason, videoCourseId, videoCompletion]);
 
   const selectStudent = (studentId: string) => navigate(`/students/${studentId}`);
-  const selectTab = (tab: Tab) => navigate(`/students/${routeStudentId}?tab=${tab}`);
+  const selectTab = (tab: Tab) => {
+    if (!routeStudentId) return;
+    setDetailPage(1);
+    setSearchParams(tab === 'overview' ? {} : { tab });
+  };
   const refreshAccess = () => { if (routeStudentId) getStudentAccess(routeStudentId).then(setAccess).catch(() => setError('تعذر تحديث صلاحيات الطالب.')); };
   const toggleCourse = async (course: AccessCourse) => {
     if (!routeStudentId) return;
@@ -131,7 +135,7 @@ export default function StudentsPage() {
 
 function StudentProfileHeader({ overview, activeTab, onTab }: { overview: StudentOverview; activeTab: Tab; onTab: (tab: Tab) => void }) {
   const user = overview.user;
-  return <><section className="student-profile-head"><span className="student-profile-avatar">{user.name?.charAt(0) || 'ط'}</span><div><span className="admin-eyebrow">ملف الطالب</span><h2>{user.name}</h2><p>{user.educationalLevel?.nameAr || 'صف غير محدد'} · {user.phone}</p></div><span className="student-profile-date">منذ {new Date(user.createdAt).toLocaleDateString('ar-EG')}</span></section><nav className="student-detail-tabs" aria-label="تفاصيل الطالب">{tabItems.map((item) => <button type="button" className={activeTab === item.key ? 'is-active' : ''} onClick={() => onTab(item.key)} key={item.key}>{item.label}</button>)}</nav></>;
+  return <><section className="student-profile-head"><span className="student-profile-avatar">{user.name?.charAt(0) || 'ط'}</span><div><span className="admin-eyebrow">ملف الطالب</span><h2>{user.name}</h2><p>{user.educationalLevel?.nameAr || 'صف غير محدد'} · {user.phone}</p></div><span className="student-profile-date">منذ {new Date(user.createdAt).toLocaleDateString('ar-EG')}</span></section><nav className="student-detail-tabs" aria-label="تفاصيل الطالب" role="tablist">{tabItems.map((item) => <button type="button" role="tab" aria-selected={activeTab === item.key} className={activeTab === item.key ? 'is-active' : ''} onClick={() => onTab(item.key)} key={item.key}>{item.label}</button>)}</nav></>;
 }
 
 function OverviewPanel({ overview, onTab }: { overview: StudentOverview; onTab: (tab: Tab) => void }) {

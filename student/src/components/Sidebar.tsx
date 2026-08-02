@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
-import { BookOpen, ClipboardList, LayoutDashboard, Menu, Settings, Target, UserRound, X } from 'lucide-react';
-import { NavLink } from '@/lib/router';
+import { BookOpen, ClipboardList, LayoutDashboard, LogOut, Menu, Settings, Target, UserRound, X } from 'lucide-react';
+import { NavLink, useNavigate } from '@/lib/router';
 import { cn } from '@/lib/utils';
 import { useAuth } from '@/contexts/AuthContext';
 
@@ -11,7 +11,8 @@ const groups = [
 ];
 
 export const Sidebar = () => {
-  const { user } = useAuth();
+  const navigate = useNavigate();
+  const { user, logout } = useAuth();
   const [open, setOpen] = useState(false);
   useEffect(() => {
     if (!open) return undefined;
@@ -34,14 +35,14 @@ export const Sidebar = () => {
       if (isMobile && previousFocus?.isConnected) previousFocus.focus();
     };
   }, [open]);
+  const handleLogout = () => {
+    logout();
+    setOpen(false);
+    navigate('/login', { replace: true });
+  };
   const content = (
     <div className="sidebar-content">
       <div className="sidebar-kicker">مساحة الطالب</div>
-      <div className="sidebar-profile">
-        <span className="sidebar-avatar">{user?.name?.charAt(0) || 'ط'}</span>
-        <span><strong>{user?.name || 'الطالب'}</strong><small>{typeof user?.educationalLevel === 'object' ? user.educationalLevel.nameAr || 'صفك الدراسي' : 'صفك الدراسي'}</small></span>
-        <UserRound size={16} aria-hidden="true" />
-      </div>
       <nav aria-label="القائمة الرئيسية" className="sidebar-nav">
         {groups.map((group) => <div className="sidebar-nav-group" key={group.label}>
           <span className="sidebar-nav-group-label">{group.label}</span>
@@ -55,6 +56,14 @@ export const Sidebar = () => {
           <strong>مع Mr Electron</strong>
           <p>كل درس خطوة جديدة في فهم العلوم.</p>
         </div>
+      </div>
+      <div className="sidebar-account">
+        <div className="sidebar-profile">
+          <span className="sidebar-avatar">{user?.name?.charAt(0) || 'ط'}</span>
+          <span><strong>{user?.name || 'الطالب'}</strong><small>{typeof user?.educationalLevel === 'object' ? user.educationalLevel.nameAr || 'صفك الدراسي' : 'صفك الدراسي'}</small></span>
+          <UserRound size={16} aria-hidden="true" />
+        </div>
+        <button type="button" className="sidebar-logout" onClick={handleLogout}><LogOut size={16} /> تسجيل الخروج</button>
       </div>
     </div>
   );

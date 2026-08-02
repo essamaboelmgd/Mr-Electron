@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
-import { BookOpen, ClipboardList, LayoutDashboard, Menu, Settings, SlidersHorizontal, Users, X } from 'lucide-react';
-import { NavLink } from '@/lib/router';
+import { BookOpen, ClipboardList, LayoutDashboard, LogOut, Menu, Settings, SlidersHorizontal, Users, X } from 'lucide-react';
+import { NavLink, useNavigate } from '@/lib/router';
 import { cn } from '@/lib/utils';
 import { useAuth } from '@/contexts/AuthContext';
 
@@ -13,7 +13,8 @@ const groups = [
 const roleLabels = { admin: 'مدير المنصة', teacher: 'مدرس العلوم', assistant: 'مساعد المدرس' } as const;
 
 export const Sidebar = () => {
-  const { user } = useAuth();
+  const navigate = useNavigate();
+  const { user, logout } = useAuth();
   const [open, setOpen] = useState(false);
   useEffect(() => {
     if (!open) return undefined;
@@ -36,16 +37,17 @@ export const Sidebar = () => {
       if (isMobile && previousFocus?.isConnected) previousFocus.focus();
     };
   }, [open]);
+  const handleLogout = () => {
+    logout();
+    setOpen(false);
+    navigate('/login', { replace: true });
+  };
   return <div className="admin-sidebar-slot">
     <button id="admin-sidebar-toggle" className="admin-mobile-menu" type="button" onClick={() => setOpen((value) => !value)} aria-controls="admin-sidebar" aria-expanded={open} aria-label={open ? 'إغلاق القائمة' : 'فتح القائمة'}>{open ? <X size={21} /> : <Menu size={21} />}</button>
     {open && <button className="admin-mobile-overlay" type="button" aria-label="إغلاق القائمة" onClick={() => setOpen(false)} />}
     <aside id="admin-sidebar" className={cn('admin-sidebar', open && 'is-open')} aria-label="قائمة الإدارة">
       <div className="admin-sidebar-inner">
         <div className="admin-sidebar-kicker"><SlidersHorizontal size={14} /> مساحة المدرس</div>
-        <div className="admin-sidebar-profile">
-          <span className="admin-sidebar-avatar">{user?.name?.charAt(0) || 'م'}</span>
-          <span><strong>{user?.name || 'مدرس العلوم'}</strong><small>{user?.role ? roleLabels[user.role] : 'مساحة الإدارة'}</small></span>
-        </div>
         <nav className="admin-nav">
           {groups.map((group) => <div className="admin-nav-group" key={group.label}>
             <span className="admin-nav-group-label">{group.label}</span>
@@ -54,6 +56,13 @@ export const Sidebar = () => {
         </nav>
         <div className="admin-sidebar-summary"><div><strong>9</strong><small>صفوف</small></div><div><strong>يدوي</strong><small>تفعيل الطلاب</small></div></div>
         <div className="admin-sidebar-note"><strong>مساحة Mr Electron</strong><p>رتّب المحتوى، فعّل الأبواب، وتابع تقدّم طلابك من مكان واحد.</p></div>
+        <div className="admin-sidebar-account">
+          <div className="admin-sidebar-profile">
+            <span className="admin-sidebar-avatar">{user?.name?.charAt(0) || 'م'}</span>
+            <span><strong>{user?.name || 'مدرس العلوم'}</strong><small>{user?.role ? roleLabels[user.role] : 'مساحة الإدارة'}</small></span>
+          </div>
+          <button type="button" className="admin-sidebar-logout" onClick={handleLogout}><LogOut size={16} /> تسجيل الخروج</button>
+        </div>
       </div>
     </aside>
   </div>;
